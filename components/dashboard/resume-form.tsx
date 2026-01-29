@@ -15,6 +15,7 @@ interface ResumeFormProps {
 }
 
 export function ResumeForm({ data, onChange }: ResumeFormProps) {
+    const [jobDescription, setJobDescription] = useState("")
 
     const updatePersonalInfo = (field: string, value: string) => {
         onChange({
@@ -89,6 +90,132 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                     {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                     Optimize with AI
                 </Button>
+            </div>
+
+            {/* Cover Letter Toggle & Input */}
+            <div className="space-y-4 border rounded-lg p-4 bg-muted/20">
+                <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={data.includeCover || false}
+                            onChange={(e) => onChange({ ...data, includeCover: e.target.checked })}
+                            className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                        />
+                        Include Cover Letter
+                    </label>
+
+                    {data.includeCover && (
+                        <select
+                            className="bg-transparent border rounded p-1 text-sm"
+                            value={data.coverTemplate || "modern"}
+                            onChange={(e) => onChange({ ...data, coverTemplate: e.target.value as any })}
+                        >
+                            <option value="modern">Modern</option>
+                            <option value="formal">Formal</option>
+                            <option value="minimal">Minimal</option>
+                        </select>
+                    )}
+                </div>
+
+                {data.includeCover && (
+                    <div className="relative">
+                        <Textarea
+                            value={data.coverLetter || ""}
+                            onChange={(e) => onChange({ ...data, coverLetter: e.target.value })}
+                            placeholder="Write your cover letter here..."
+                            className="w-full min-h-[150px] pr-8"
+                        />
+                        <div className="absolute top-2 right-2 flex gap-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
+                                onClick={async () => {
+                                    setGenerating(true)
+                                    try {
+                                        const { generateCoverLetter } = await import("@/actions/generate-resume")
+                                        const generated = await generateCoverLetter(data)
+                                        onChange({ ...data, coverLetter: generated })
+                                        toast.success("Cover letter generated!")
+                                    } catch (error) {
+                                        toast.error("Failed to generate cover letter")
+                                    } finally {
+                                        setGenerating(false)
+                                    }
+                                }}
+                                disabled={generating}
+                            >
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                Generate
+                            </Button>
+
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
+                                onClick={async () => {
+                                    if (!jobDescription) {
+                                        toast.error("Please enter a Job Description below first")
+                                        return
+                                    }
+                                    setGenerating(true)
+                                    try {
+                                        const { matchCoverLetterToJob } = await import("@/actions/generate-resume")
+                                        const optimized = await matchCoverLetterToJob(data.coverLetter || "", jobDescription, data)
+                                        onChange({ ...data, coverLetter: optimized })
+                                        toast.success("Cover letter matched to job!")
+                                    } catch (error) {
+                                        toast.error("Failed to match cover letter")
+                                    } finally {
+                                        setGenerating(false)
+                                    }
+                                }}
+                                disabled={generating}
+                            >
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                Match Job
+                            </Button>
+
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
+                                onClick={async () => {
+                                    setGenerating(true)
+                                    try {
+                                        const { optimizeCoverLetter } = await import("@/actions/generate-resume")
+                                        const optimized = await optimizeCoverLetter(data.coverLetter || "", data)
+                                        onChange({ ...data, coverLetter: optimized })
+                                        toast.success("Cover letter optimized!")
+                                    } catch (error) {
+                                        toast.error("Failed to optimize cover letter")
+                                    } finally {
+                                        setGenerating(false)
+                                    }
+                                }}
+                                disabled={generating}
+                            >
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                Optimize
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Job Description Input (for AI) */}
+            <div className="space-y-2 border rounded-lg p-4 bg-muted/20">
+                <Label className="font-semibold flex items-center gap-2">
+                    Target Job Description
+                    <span className="text-xs font-normal text-muted-foreground">(for AI matching)</span>
+                </Label>
+                <Textarea
+                    placeholder="Paste job description here..."
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    rows={4}
+                />
             </div>
 
             <Accordion type="single" collapsible defaultValue="personal">
@@ -197,11 +324,11 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                         <Input
                                             value={exp.startDate}
                                             placeholder="MM/YYYY"
-                                            onChange={(e) => { const cleanValue = e.target.value.replace(/[^0-9/]/g, '');
-                                            const newExp = [...data.experience]
-                                            newExp[index].startDate = cleanValue
-                                            onChange({ ...data, experience: newExp }) 
-                                        }}
+                                            onChange={(e) => {
+                                                const newExp = [...data.experience]
+                                                newExp[index].startDate = e.target.value
+                                                onChange({ ...data, experience: newExp })
+                                            }}
                                         />
                                     </div>
                                     <div className="space-y-1">
@@ -209,11 +336,11 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                         <Input
                                             value={exp.endDate}
                                             placeholder="Present"
-                                            onChange={(e) => { const cleanValue = e.target.value.replace(/[^0-9/]/g, '');
-                                            const newExp = [...data.experience]
-                                            newExp[index].endDate = cleanValue
-                                            onChange({ ...data, experience: newExp })
-                                        }}
+                                            onChange={(e) => {
+                                                const newExp = [...data.experience]
+                                                newExp[index].endDate = e.target.value
+                                                onChange({ ...data, experience: newExp })
+                                            }}
                                         />
                                     </div>
                                 </div>
@@ -294,8 +421,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                         <Textarea
                             rows={3}
                             value={data.skills.join(", ")}
-                            onChange={(e) => { const skillsArray = e.target.value.split(","); 
-                            onChange({ ...data, skills: skillsArray }); }}
+                            onChange={(e) => onChange({ ...data, skills: e.target.value.split(",").map(s => s.trim()) })}
                             placeholder="React, TypeScript, Node.js (comma separated)"
                         />
                     </AccordionContent>

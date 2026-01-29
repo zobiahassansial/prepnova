@@ -1,233 +1,506 @@
 "use client"
 
 import { ResumeData } from "@/types/resume"
-import { useRef } from "react"
+import { useRef, useEffect } from "react"
 import { useReactToPrint } from "react-to-print"
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
 
 interface ResumePreviewProps {
     data: ResumeData
+    onPageCountChange?: (pages: number) => void
 }
 
-export function ResumePreview({ data }: ResumePreviewProps) {
+export function ResumePreview({ data, onPageCountChange }: ResumePreviewProps) {
     const componentRef = useRef<HTMLDivElement>(null)
 
-    const handlePrint = useReactToPrint({
-        content: () => componentRef.current,
-        documentTitle: `Resume - ${data.personalInfo.fullName || "User"}`,
-        pageStyle: `@page { size: A4; margin: 0; } @media print { body { -webkit-print-color-adjust: exact; } }`
-    } as any)
+    // PAGE COUNT LOGIC
+    // We want to calculate the number of A4 pages based on height.
+    useEffect(() => {
+        if (!componentRef.current || !onPageCountChange) return
 
-    const getTemplateStyle = () => {
-        switch (data.template) {
-            case "modern":
-                return {
-                    font: 'Inter, sans-serif',
-                    headerClass: 'bg-slate-900 text-white p-8 mb-6',
-                    titleClass: 'text-4xl font-bold uppercase tracking-tight',
-                    sectionTitleClass: 'text-lg font-bold uppercase text-slate-800 border-b-2 border-slate-900 mb-3 pb-1',
-                    gridClass: 'grid grid-cols-[1fr_2fr] gap-8 p-8 pt-0'
-                }
-            case "minimal":
-                return {
-                    font: 'Inter, sans-serif',
-                    headerClass: 'text-center mb-8 pb-8 border-b',
-                    titleClass: 'text-3xl font-light tracking-widest uppercase',
-                    sectionTitleClass: 'text-sm font-semibold uppercase tracking-widest text-gray-500 mb-4 mt-2',
-                    gridClass: 'p-8 max-w-2xl mx-auto'
-                }
-            case "classic":
-            default:
-                return {
-                    font: 'Georgia, serif',
-                    headerClass: 'text-center border-b-2 border-black pb-4 mb-6',
-                    titleClass: 'text-3xl font-bold uppercase tracking-wider mb-2',
-                    sectionTitleClass: 'text-sm font-bold uppercase border-b border-gray-400 mb-2 pb-1',
-                    gridClass: 'p-[20mm]'
-                }
-        }
+        const observer = new ResizeObserver(() => {
+            if (!componentRef.current) return
+            // A4 height at 96 DPI is approx 1123px.
+            // Using slightly safe value or exact? 
+            // The previous logic in parent might have been doing this, 
+            // but if we pass it down, we should probably just notify height?
+            // Wait, the ResumeBuilder passed `setPageCount`.
+            // So ResumePreview should calculate pages and call it?
+            // The ERROR said `onPageCountChange` property does not exist.
+            // Earlier I saw `usePageCount` in ResumeBuilder that took a REF.
+            // But ResumeBuilder usage was `<ResumePreview ... onPageCountChange={setPageCount} />`
+            // So ResumePreview is responsible for logic?
+            // Re-checking step 162 (original state)...
+            // Original state had `useEffect(() => { ... }, [onPageCountChange])`
+
+            const element = componentRef.current
+            const height = element.scrollHeight
+            const A4_HEIGHT_PX = 1122
+            const pages = Math.max(1, Math.ceil(height / A4_HEIGHT_PX))
+            onPageCountChange(pages)
+        })
+
+        observer.observe(componentRef.current)
+        return () => observer.disconnect()
+    }, [onPageCountChange])
+
+    const handlePrint = useReactToPrint({
+        contentRef: componentRef,
+        documentTitle: `Resume - ${data.personalInfo.fullName || "User"}`,
+    })
+
+    const isSectionVisible = (type: string) => {
+        const section = data.sections.find(s => s.type === type)
+        return section?.isVisible ?? true
     }
 
-    const styles = getTemplateStyle()
-
     return (
-        <div className="w-full h-full flex flex-col bg-slate-100/50 overflow-hidden">
-            {/* 1. Header (Fixed, not sticky inside scroll) */}
-            <div className="w-full flex justify-end p-4 bg-white border-b shadow-sm z-10 flex-shrink-0">
-                <Button onClick={() => handlePrint && handlePrint()} size="sm" className="shadow-sm">
-                    <Download className="h-4 w-4 mr-2" /> Download PDF
-                </Button>
-            </div>
+        <div className="w-full h-full flex flex-col overflow-hidden">
+            {/* 1. Header (Fixed Toolbar) */}
+            {/* 1. Header (Fixed Toolbar) - REMOVED, controlled by parent now */}
+            <Button
+                id="print-resume"
+                onClick={() => handlePrint && handlePrint()}
+                className="hidden"
+            />
 
-            {/* 2. Scrollable Preview Container */}
-            {/* 2. Scrollable Preview Container */}
-            <div className="flex-1 w-full overflow-y-auto overflow-x-hidden relative min-h-0 pt-20">
+            {/* 2. The Canvas (Gray Background, Natural Scroll) */}
+            <div className="flex-1 overflow-auto bg-white">
 
-                {/* 3. Centering Wrapper */}
-                <div className="min-h-full w-full flex justify-center py-10 px-8">
-                    {/* 4. Resume Page (A4 Fixed, Natural Height) */}
+                <div className="min-h-full flex justify-center py-6">
+
+
+                    {/* Print styles override */}
+                    <style jsx global>{`
+                        @media print {
+                            @page { size: auto; margin: 0mm; }
+                            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        }
+                    `}</style>
+
+                    {/* 3. The Real A4 Paper (Fixed Dimensions) */}
                     <div
                         ref={componentRef}
-                        className="w-[210mm] min-h-[297mm] bg-white text-black shadow-2xl flex-shrink-0"
-                        style={{ fontFamily: styles.font }}
+                        className="w-[210mm] min-h-[297mm] bg-white text-black shadow-xl"
+                    // style={{ fontFamily: styles.font }} // Font is now set per template
                     >
-                        {/* Print styles override this to ensure proper print size */}
-                        <style jsx global>{`
-                            @media print {
-                                @page { size: auto; margin: 0mm; }
-                                body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-                            }
-                        `}</style>
-
-                        {/* Template Content */}
-                        {data.template === "modern" ? (
-                            <div className="h-full">
-                                <div className={styles.headerClass}>
-                                    <h1 className={styles.titleClass}>{data.personalInfo.fullName || "Your Name"}</h1>
-                                    <div className="flex flex-wrap gap-4 text-sm text-slate-300 mt-2">
-                                        {data.personalInfo.email && <span>{data.personalInfo.email}</span>}
-                                        {data.personalInfo.phone && <span>{data.personalInfo.phone}</span>}
-                                        {data.personalInfo.location && <span>{data.personalInfo.location}</span>}
-                                    </div>
-                                </div>
-                                <div className={styles.gridClass}>
-                                    <div className="space-y-6">
-                                        {/* Left Column: Skills, Education */}
-                                        {data.skills.length > 0 && (
-                                            <section>
-                                                <h2 className={styles.sectionTitleClass}>Skills</h2>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {data.skills.map((skill, i) => (
-                                                        <span key={i} className="bg-slate-100 px-2 py-1 rounded text-sm">{skill}</span>
-                                                    ))}
+                        {/* TEMPLATE CONTENT */}
+                        {(() => {
+                            switch (data.template) {
+                                case "template_modern_pro":
+                                    return (
+                                        <div className="h-full font-sans text-left color-slate-900">
+                                            <header className="bg-slate-900 text-white p-12 text-center">
+                                                <h1 className="text-4xl font-bold tracking-widest uppercase mb-2">
+                                                    {data.personalInfo.fullName}
+                                                </h1>
+                                                <div className="flex justify-center gap-4 text-xs tracking-wide text-gray-300">
+                                                    {data.personalInfo.email && <span>{data.personalInfo.email}</span>}
+                                                    {data.personalInfo.phone && <span>• {data.personalInfo.phone}</span>}
+                                                    {data.personalInfo.location && <span>• {data.personalInfo.location}</span>}
                                                 </div>
-                                            </section>
-                                        )}
-                                        {data.education.length > 0 && (
-                                            <section>
-                                                <h2 className={styles.sectionTitleClass}>Education</h2>
-                                                <div className="space-y-4">
-                                                    {data.education.map((edu, i) => (
-                                                        <div key={i}>
-                                                            <h3 className="font-bold text-sm">{edu.school}</h3>
-                                                            <p className="text-sm">{edu.degree}</p>
-                                                            <p className="text-xs text-gray-500">{edu.startDate} - {edu.endDate}</p>
+                                            </header>
+
+                                            <div className="p-12 space-y-8">
+                                                {isSectionVisible("summary") && data.summary && (
+                                                    <section>
+                                                        <h2 className="text-sm font-bold text-blue-800 uppercase tracking-widest border-b-2 border-slate-100 pb-2 mb-3">Summary</h2>
+                                                        <p className="text-sm leading-relaxed text-slate-700">
+                                                            {data.summary}
+                                                        </p>
+                                                    </section>
+                                                )}
+
+                                                {isSectionVisible("experience") && data.experience.length > 0 && (
+                                                    <section>
+                                                        <h2 className="text-sm font-bold text-blue-800 uppercase tracking-widest border-b-2 border-slate-100 pb-2 mb-4">Experience</h2>
+                                                        <div className="space-y-6">
+                                                            {data.experience.map((exp, i) => (
+                                                                <div key={i} className="relative pl-6 border-l-2 border-slate-100">
+                                                                    <div className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-blue-800"></div>
+                                                                    <div className="flex justify-between items-baseline mb-1">
+                                                                        <h3 className="font-bold text-slate-900">{exp.position}</h3>
+                                                                        <span className="text-xs text-slate-500 font-medium whitespace-nowrap ml-4">{exp.startDate} – {exp.current ? "Present" : exp.endDate}</span>
+                                                                    </div>
+                                                                    <div className="text-sm text-blue-700 font-medium mb-2">{exp.company}</div>
+                                                                    <ul className="list-disc ml-4 text-sm text-slate-600 space-y-1">
+                                                                        {exp.description.split("\n").map((d, j) => (
+                                                                            <li key={j}>{d}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            ))}
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            </section>
-                                        )}
-                                    </div>
-                                    <div className="space-y-6">
-                                        {/* Right Column: Summary, Experience */}
-                                        {data.summary && (
-                                            <section>
-                                                <h2 className={styles.sectionTitleClass}>Profile</h2>
-                                                <p className="text-sm leading-relaxed">{data.summary}</p>
-                                            </section>
-                                        )}
-                                        {data.experience.length > 0 && (
-                                            <section>
-                                                <h2 className={styles.sectionTitleClass}>Experience</h2>
-                                                <div className="space-y-5">
-                                                    {data.experience.map((exp, i) => (
-                                                        <div key={i}>
-                                                            <h3 className="font-bold text-base">{exp.position}</h3>
-                                                            <div className="text-sm text-primary font-medium mb-1">{exp.company} | {exp.startDate} – {exp.endDate}</div>
-                                                            <p className="text-sm whitespace-pre-line text-slate-700">{exp.description}</p>
+                                                    </section>
+                                                )}
+
+                                                {isSectionVisible("education") && data.education.length > 0 && (
+                                                    <section>
+                                                        <h2 className="text-sm font-bold text-blue-800 uppercase tracking-widest border-b-2 border-slate-100 pb-2 mb-4">Education</h2>
+                                                        <div className="grid grid-cols-1 gap-4">
+                                                            {data.education.map((edu, i) => (
+                                                                <div key={i} className="flex justify-between items-start">
+                                                                    <div>
+                                                                        <div className="font-bold text-slate-900">{edu.school}</div>
+                                                                        <div className="text-sm text-slate-600">{edu.degree}</div>
+                                                                    </div>
+                                                                    <div className="text-xs text-slate-500 font-medium">{edu.startDate} - {edu.endDate}</div>
+                                                                </div>
+                                                            ))}
                                                         </div>
-                                                    ))}
+                                                    </section>
+                                                )}
+
+                                                {isSectionVisible("skills") && data.skills.length > 0 && (
+                                                    <section>
+                                                        <h2 className="text-sm font-bold text-blue-800 uppercase tracking-widest border-b-2 border-slate-100 pb-2 mb-3">Skills</h2>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {data.skills.map((skill, index) => (
+                                                                <span key={index} className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-medium">
+                                                                    {skill}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </section>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+
+                                case "template_sidebar":
+                                    return (
+                                        <div className="h-full flex font-sans">
+                                            {/* Sidebar */}
+                                            <div className="w-[30%] bg-slate-100 p-8 pt-12 border-r border-slate-200 min-h-full">
+                                                <div className="space-y-8">
+                                                    <div>
+                                                        <h3 className="font-bold text-slate-900 uppercase tracking-wider text-xs mb-3 border-b border-slate-300 pb-1">Contact</h3>
+                                                        <div className="text-sm text-slate-600 space-y-2 break-all">
+                                                            {data.personalInfo.email && <div className="flex gap-2"><span>✉</span> {data.personalInfo.email}</div>}
+                                                            {data.personalInfo.phone && <div className="flex gap-2"><span>📞</span> {data.personalInfo.phone}</div>}
+                                                            {data.personalInfo.location && <div className="flex gap-2"><span>📍</span> {data.personalInfo.location}</div>}
+                                                            {data.personalInfo.linkedin && <div className="flex gap-2"><span>🔗</span> {data.personalInfo.linkedin}</div>}
+                                                        </div>
+                                                    </div>
+
+                                                    {isSectionVisible("education") && data.education.length > 0 && (
+                                                        <div>
+                                                            <h3 className="font-bold text-slate-900 uppercase tracking-wider text-xs mb-3 border-b border-slate-300 pb-1">Education</h3>
+                                                            <div className="space-y-4">
+                                                                {data.education.map((edu, i) => (
+                                                                    <div key={i}>
+                                                                        <div className="font-bold text-sm text-slate-800">{edu.school}</div>
+                                                                        <div className="text-xs text-slate-600 mb-1">{edu.degree}</div>
+                                                                        <div className="text-xs text-slate-500">{edu.endDate}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {isSectionVisible("skills") && data.skills.length > 0 && (
+                                                        <div>
+                                                            <h3 className="font-bold text-slate-900 uppercase tracking-wider text-xs mb-3 border-b border-slate-300 pb-1">Skills</h3>
+                                                            <ul className="space-y-1.5">
+                                                                {data.skills.map((skill, index) => (
+                                                                    <li key={index} className="text-sm text-slate-700 block bg-white px-2 py-1 rounded shadow-sm border border-slate-100">
+                                                                        {skill}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            </section>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            // Classic and Minimal share single column structure mostly
-                            <div className={styles.gridClass}>
-                                <div className={styles.headerClass}>
-                                    <h1 className={styles.titleClass}>{data.personalInfo.fullName || "Your Name"}</h1>
-                                    <div className="flex flex-wrap justify-center gap-x-6 gap-y-1 text-sm text-gray-700 mt-2">
-                                        {data.personalInfo.email && <span>{data.personalInfo.email}</span>}
-                                        {data.personalInfo.phone && <span>{data.personalInfo.phone}</span>}
-                                        {data.personalInfo.location && <span>{data.personalInfo.location}</span>}
-                                        {data.personalInfo.linkedin && <span>{data.personalInfo.linkedin}</span>}
-                                    </div>
-                                </div>
+                                            </div>
 
-                                <div className="space-y-6">
-                                    {data.summary && (
-                                        <section>
-                                            <h2 className={styles.sectionTitleClass}>Professional Summary</h2>
-                                            <p className="text-sm leading-relaxed">{data.summary}</p>
-                                        </section>
-                                    )}
+                                            {/* Main Content */}
+                                            <div className="flex-1 p-10 pt-12">
+                                                <header className="mb-10 text-left border-b-4 border-slate-800 pb-6">
+                                                    <h1 className="text-4xl font-extrabold text-slate-900 leading-tight">
+                                                        {data.personalInfo.fullName.split(' ')[0]}<br />
+                                                        <span className="text-slate-500 font-light">{data.personalInfo.fullName.split(' ').slice(1).join(' ')}</span>
+                                                    </h1>
+                                                </header>
 
-                                    {data.experience.length > 0 && (
-                                        <section>
-                                            <h2 className={styles.sectionTitleClass}>Experience</h2>
-                                            <div className="space-y-4">
-                                                {data.experience.map((exp, i) => (
-                                                    <div key={i}>
-                                                        {styles.font.includes('serif') ? (
-                                                            <>
-                                                                <div className="flex justify-between items-baseline font-bold text-sm">
-                                                                    <h3>{exp.position}</h3>
+                                                <div className="space-y-8">
+                                                    {isSectionVisible("summary") && data.summary && (
+                                                        <section>
+                                                            <h2 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                                                <span className="w-1.5 h-6 bg-slate-800 block"></span>
+                                                                Profile
+                                                            </h2>
+                                                            <p className="text-sm leading-relaxed text-slate-600">
+                                                                {data.summary}
+                                                            </p>
+                                                        </section>
+                                                    )}
+
+                                                    {isSectionVisible("experience") && data.experience.length > 0 && (
+                                                        <section>
+                                                            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                                                <span className="w-1.5 h-6 bg-slate-800 block"></span>
+                                                                Work Experience
+                                                            </h2>
+                                                            <div className="space-y-6">
+                                                                {data.experience.map((exp, i) => (
+                                                                    <div key={i}>
+                                                                        <div className="flex justify-between items-baseline mb-1">
+                                                                            <h3 className="font-bold text-slate-900 text-sm">{exp.position}</h3>
+                                                                            <span className="text-xs text-slate-500 font-mono">{exp.startDate} - {exp.current ? "Present" : exp.endDate}</span>
+                                                                        </div>
+                                                                        <div className="text-sm font-semibold text-slate-700 mb-2">{exp.company}</div>
+                                                                        <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                                                                            {exp.description}
+                                                                        </p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </section>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+
+                                case "template_minimal_elegant":
+                                    return (
+                                        <div className="h-full p-12 font-serif text-center" style={{ fontFamily: 'Georgia, serif' }}>
+                                            <header className="mb-12">
+                                                <h1 className="text-4xl italic mb-3 text-gray-900 tracking-wide">
+                                                    {data.personalInfo.fullName}
+                                                </h1>
+                                                <div className="text-xs uppercase tracking-[0.25em] text-gray-500 mb-6">
+                                                    Professional Portfolio
+                                                </div>
+                                                <div className="flex justify-center gap-4 text-xs font-sans text-gray-400">
+                                                    {data.personalInfo.email && <span className="border-b border-transparent hover:border-gray-300 transition-colors">{data.personalInfo.email}</span>}
+                                                    {data.personalInfo.phone && <span>{data.personalInfo.phone}</span>}
+                                                    {data.personalInfo.location && <span>{data.personalInfo.location}</span>}
+                                                </div>
+                                            </header>
+
+                                            <div className="max-w-[85%] mx-auto space-y-10 text-left">
+                                                {isSectionVisible("summary") && data.summary && (
+                                                    <section className="text-center">
+                                                        <p className="text-sm leading-8 text-gray-700 italic">
+                                                            "{data.summary}"
+                                                        </p>
+                                                        <div className="w-12 h-px bg-gray-200 mx-auto mt-6"></div>
+                                                    </section>
+                                                )}
+
+                                                {isSectionVisible("experience") && data.experience.length > 0 && (
+                                                    <section>
+                                                        <h2 className="text-center text-xs font-sans uppercase tracking-widest text-gray-400 mb-8">Experience</h2>
+                                                        <div className="space-y-8">
+                                                            {data.experience.map((exp, i) => (
+                                                                <div key={i} className="group">
+                                                                    <div className="flex justify-between items-baseline mb-2">
+                                                                        <h3 className="text-lg italic font-medium text-gray-800">{exp.company}</h3>
+                                                                        <span className="text-xs font-sans text-gray-400">{exp.startDate} — {exp.current ? "Present" : exp.endDate}</span>
+                                                                    </div>
+                                                                    <div className="text-xs font-sans uppercase tracking-wide text-gray-500 mb-3">{exp.position}</div>
+                                                                    <p className="text-sm font-sans text-gray-600 leading-relaxed text-justify">
+                                                                        {exp.description}
+                                                                    </p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </section>
+                                                )}
+
+                                                {isSectionVisible("education") && data.education.length > 0 && (
+                                                    <section className="text-center">
+                                                        <h2 className="text-xs font-sans uppercase tracking-widest text-gray-400 mb-6 mt-10">Education</h2>
+                                                        <div className="space-y-2">
+                                                            {data.education.map((edu, i) => (
+                                                                <div key={i}>
+                                                                    <div className="text-base italic text-gray-800">{edu.school}</div>
+                                                                    <div className="text-xs font-sans text-gray-500">{edu.degree} · {edu.endDate}</div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </section>
+                                                )}
+
+                                                {isSectionVisible("skills") && data.skills.length > 0 && (
+                                                    <section className="text-center pt-4">
+                                                        <div className="text-xs font-sans text-gray-500 leading-loose">
+                                                            {data.skills.join("  ·  ")}
+                                                        </div>
+                                                    </section>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+
+                                case "template_creative_blocks":
+                                    return (
+                                        <div className="h-full p-8 font-sans bg-white relative">
+                                            {/* Header Block */}
+                                            <header className="mb-8">
+                                                <div className="inline-block bg-black text-white p-6 transform -rotate-1 shadow-lg mb-6">
+                                                    <h1 className="text-5xl font-black uppercase tracking-tight leading-none">
+                                                        {data.personalInfo.fullName}
+                                                    </h1>
+                                                </div>
+                                                <div className="flex flex-wrap gap-3 font-mono text-xs font-bold pl-2">
+                                                    {data.personalInfo.email && <span className="bg-yellow-100 px-2 py-1 transform rotate-1 border border-black">{data.personalInfo.email}</span>}
+                                                    {data.personalInfo.phone && <span className="bg-cyan-100 px-2 py-1 transform -rotate-2 border border-black">{data.personalInfo.phone}</span>}
+                                                    {data.personalInfo.location && <span className="bg-pink-100 px-2 py-1 transform rotate-1 border border-black">{data.personalInfo.location}</span>}
+                                                </div>
+                                            </header>
+
+                                            <div className="grid grid-cols-12 gap-8">
+                                                {/* Left Column (Main) */}
+                                                <div className="col-span-8 space-y-8">
+                                                    {isSectionVisible("summary") && data.summary && (
+                                                        <section className="bg-slate-50 border-l-4 border-black p-4">
+                                                            <p className="text-sm font-medium leading-relaxed font-mono">
+                                                                {data.summary}
+                                                            </p>
+                                                        </section>
+                                                    )}
+
+                                                    {isSectionVisible("experience") && data.experience.length > 0 && (
+                                                        <section>
+                                                            <h2 className="text-2xl font-black uppercase mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
+                                                                Experience
+                                                            </h2>
+                                                            <div className="space-y-8">
+                                                                {data.experience.map((exp, i) => (
+                                                                    <div key={i} className="relative">
+                                                                        <div className="absolute -left-3 top-2 w-1.5 h-1.5 bg-black rounded-full"></div>
+                                                                        <h3 className="text-xl font-bold leading-none mb-1">{exp.position}</h3>
+                                                                        <div className="text-sm font-bold text-gray-400 mb-2 uppercase tracking-wide">{exp.company} // {exp.startDate} - {exp.current ? "Now" : exp.endDate}</div>
+                                                                        <p className="text-sm text-gray-700 leading-relaxed border-l-2 border-gray-100 pl-4 py-1">
+                                                                            {exp.description}
+                                                                        </p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </section>
+                                                    )}
+                                                </div>
+
+                                                {/* Right Column (Side) */}
+                                                <div className="col-span-4 space-y-8">
+                                                    {isSectionVisible("skills") && data.skills.length > 0 && (
+                                                        <section className="bg-yellow-50 p-4 rounded-xl border-2 border-yellow-400 border-dashed">
+                                                            <h2 className="font-black text-yellow-900 uppercase tracking-widest text-sm mb-4 text-center">Skillset</h2>
+                                                            <div className="flex flex-wrap gap-2 justify-center">
+                                                                {data.skills.map((skill, index) => (
+                                                                    <span key={index} className="bg-white border border-yellow-400 px-2 py-1 text-xs font-bold rounded shadow-sm">
+                                                                        {skill}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </section>
+                                                    )}
+
+                                                    {isSectionVisible("education") && data.education.length > 0 && (
+                                                        <section className="bg-purple-50 p-4 rounded-xl border-2 border-purple-400 border-dashed">
+                                                            <h2 className="font-black text-purple-900 uppercase tracking-widest text-sm mb-4 text-center">Education</h2>
+                                                            <div className="space-y-4">
+                                                                {data.education.map((edu, i) => (
+                                                                    <div key={i} className="text-center">
+                                                                        <div className="font-bold text-sm leading-tight">{edu.school}</div>
+                                                                        <div className="text-xs text-purple-700 mt-1">{edu.degree}</div>
+                                                                        <div className="text-[10px] text-gray-500 font-mono mt-1">{edu.endDate}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </section>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+
+                                // Default / Basic / Legacy Handling
+                                case "basic":
+                                case "modern":
+                                case "classic":
+                                case "minimal":
+                                default:
+                                    return (
+                                        <div className="h-full">
+                                            {/* STRICT HEADER */}
+                                            <header className="px-12 pt-12 pb-6 text-center">
+                                                <h1 className="text-4xl font-bold tracking-wide">
+                                                    {data.personalInfo.fullName}
+                                                </h1>
+
+                                                <p className="mt-2 text-sm text-gray-700">
+                                                    {data.personalInfo.email}
+                                                    {data.personalInfo.phone && ` • ${data.personalInfo.phone}`}
+                                                    {data.personalInfo.location && ` • ${data.personalInfo.location}`}
+                                                </p>
+
+                                                <hr className="mt-6 border-black" />
+                                            </header>
+
+                                            <div className="px-10 py-6 space-y-8">
+                                                {isSectionVisible("summary") && data.summary && (
+                                                    <section>
+                                                        <h2 className="text-xs font-bold uppercase tracking-widest border-b border-black pb-1 mb-4">Summary</h2>
+                                                        <p className="text-sm leading-relaxed">
+                                                            {data.summary}
+                                                        </p>
+                                                    </section>
+                                                )}
+
+                                                {isSectionVisible("experience") && data.experience.length > 0 && (
+                                                    <section>
+                                                        <h2 className="text-xs font-bold uppercase tracking-widest border-b border-black pb-1 mb-4">Experience</h2>
+                                                        {data.experience.map((exp, i) => (
+                                                            <div key={i} className="mb-4">
+                                                                <div className="flex justify-between font-semibold">
+                                                                    <span>{exp.position}</span>
                                                                     <span>{exp.startDate} – {exp.current ? "Present" : exp.endDate}</span>
                                                                 </div>
-                                                                <div className="flex justify-between items-baseline text-sm italic mb-1">
-                                                                    <span>{exp.company}</span>
-                                                                    <span>{exp.location}</span>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            // Minimal/cleaner styles
-                                                            <div className="mb-2">
-                                                                <h3 className="font-bold">{exp.position}</h3>
-                                                                <div className="text-sm text-gray-600">{exp.company} | {exp.startDate} – {exp.endDate}</div>
+                                                                <div className="italic text-sm">{exp.company}</div>
+                                                                <ul className="list-disc ml-5 text-sm mt-1">
+                                                                    {exp.description.split("\n").map((d, j) => (
+                                                                        <li key={j}>{d}</li>
+                                                                    ))}
+                                                                </ul>
                                                             </div>
-                                                        )}
-                                                        <p className="text-sm whitespace-pre-line">{exp.description}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </section>
-                                    )}
+                                                        ))}
+                                                    </section>
+                                                )}
 
-                                    {data.education.length > 0 && (
-                                        <section>
-                                            <h2 className={styles.sectionTitleClass}>Education</h2>
-                                            <div className="space-y-2">
-                                                {data.education.map((edu, i) => (
-                                                    <div key={i} className="flex justify-between">
-                                                        <div>
-                                                            <div className="font-bold text-sm">{edu.school}</div>
-                                                            <div className="text-sm">{edu.degree}</div>
-                                                        </div>
-                                                        <div className="text-sm text-right">
-                                                            <div>{edu.startDate} - {edu.endDate}</div>
-                                                            <div className="text-xs text-gray-500">{edu.location}</div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </section>
-                                    )}
+                                                {isSectionVisible("education") && data.education.length > 0 && (
+                                                    <section>
+                                                        <h2 className="text-xs font-bold uppercase tracking-widest border-b border-black pb-1 mb-4">Education</h2>
+                                                        {data.education.map((edu, i) => (
+                                                            <div key={i} className="flex justify-between text-sm">
+                                                                <div>
+                                                                    <strong>{edu.degree}</strong><br />
+                                                                    {edu.school}
+                                                                </div>
+                                                                <div>{edu.endDate}</div>
+                                                            </div>
+                                                        ))}
+                                                    </section>
+                                                )}
 
-                                    {data.skills.length > 0 && (
-                                        <section>
-                                            <h2 className={styles.sectionTitleClass}>Skills</h2>
-                                            <p className="text-sm">{data.skills.join(", ")}</p>
-                                        </section>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                                                {isSectionVisible("skills") && data.skills.length > 0 && (
+                                                    <section>
+                                                        <h2 className="text-xs font-bold uppercase tracking-widest border-b border-black pb-1 mb-4">Skills</h2>
+                                                        <p className="text-sm">
+                                                            {data.skills.join(" • ")}
+                                                        </p>
+                                                    </section>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                            }
+                        })()}</div>
                 </div>
             </div>
         </div>
     )
-}
+} 

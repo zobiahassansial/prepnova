@@ -1,92 +1,106 @@
 import Link from "next/link"
-import { Brain, Facebook, Instagram, Linkedin, Twitter } from "lucide-react"
+import { Brain, Instagram, Linkedin, Twitter } from "lucide-react"
 
 export function Footer() {
     return (
         <footer className="w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="container px-4 md:px-6 py-10 md:py-12">
-                <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
-                    <div className="space-y-4 lg:col-span-2">
+            <div className="container mx-auto max-w-7xl px-4 md:px-6 py-12 md:py-16">
+                
+                {/* Top Section: Flex container for Desktop (Brand Left, Links Right) */}
+                <div className="flex flex-col lg:flex-row lg:justify-between gap-12 lg:gap-8">
+                    
+                    {/* 1. Brand Section (Left Side) */}
+                    <div className="space-y-4 lg:max-w-sm">
                         <Link className="flex items-center gap-2 font-bold text-xl" href="/">
-                            <Brain className="h-6 w-6 text-primary" />
+                            <div className="rounded-lg bg-primary/10 p-1">
+                                <Brain className="h-6 w-6 text-primary" />
+                            </div>
                             <span>PrepNova</span>
                         </Link>
-                        <p className="max-w-[300px] text-muted-foreground text-sm">
+                        <p className="text-muted-foreground text-sm leading-relaxed">
                             Your AI-powered study companion. Ace exams, build resumes, and master new skills faster than ever.
                         </p>
-                        <div className="flex items-center gap-4">
-                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                        
+                        {/* Social Icons */}
+                        <div className="flex items-center gap-4 pt-2">
+                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors hover:scale-110">
                                 <Twitter className="h-5 w-5" />
                                 <span className="sr-only">Twitter</span>
                             </Link>
-                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors hover:scale-110">
                                 <Instagram className="h-5 w-5" />
                                 <span className="sr-only">Instagram</span>
                             </Link>
-                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors hover:scale-110">
                                 <Linkedin className="h-5 w-5" />
                                 <span className="sr-only">LinkedIn</span>
                             </Link>
                         </div>
                     </div>
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold tracking-wide uppercase text-foreground/60">Product</h4>
-                        <ul className="space-y-3 text-sm">
-                            <li>
-                                <Link href="#features" className="text-muted-foreground hover:text-primary transition-colors">
-                                    Features
-                                </Link>
-                            </li>
-                            <li>
-                                <Link href="#pricing" className="text-muted-foreground hover:text-primary transition-colors">
-                                    Pricing
-                                </Link>
-                            </li>
-                            <li>
-                                <Link href="/dashboard" className="text-muted-foreground hover:text-primary transition-colors">
-                                    Dashboard
-                                </Link>
-                            </li>
-                        </ul>
-                    </div>
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold tracking-wide uppercase text-foreground/60">Resources</h4>
-                        <ul className="space-y-3 text-sm">
-                            <li>
-                                <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                                    Learning Hub
-                                </Link>
-                            </li>
-                            <li>
-                                <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                                    Blog
-                                </Link>
-                            </li>
-                            <li>
-                                <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                                    Help Center
-                                </Link>
-                            </li>
-                        </ul>
-                    </div>
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold tracking-wide uppercase text-foreground/60">Legal</h4>
-                        <ul className="space-y-3 text-sm">
-                            <li>
-                                <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                                    Privacy Policy
-                                </Link>
-                            </li>
-                            <li>
-                                <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                                    Terms of Service
-                                </Link>
-                            </li>
-                        </ul>
+
+                    {/* 2. Links Section (Right Side - Grid) */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-8 lg:gap-16">
+                        
+                        {/* Product Column */}
+                        <div className="space-y-4">
+                            <h4 className="text-sm font-semibold tracking-wider uppercase text-foreground">Product</h4>
+                            <ul className="space-y-3 text-sm text-muted-foreground">
+                                <li>
+                                    <Link href="#features" className="hover:text-primary transition-colors">Features</Link>
+                                </li>
+                                <li>
+                                    <Link href="#pricing" className="hover:text-primary transition-colors">Pricing</Link>
+                                </li>
+                                <li>
+                                    <Link href="/dashboard" className="hover:text-primary transition-colors">Dashboard</Link>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* Resources Column */}
+                        <div className="space-y-4">
+                            <h4 className="text-sm font-semibold tracking-wider uppercase text-foreground">Resources</h4>
+                            <ul className="space-y-3 text-sm text-muted-foreground">
+                                <li>
+                                    <Link href="#" className="hover:text-primary transition-colors">Learning Hub</Link>
+                                </li>
+                                <li>
+                                    <Link href="#" className="hover:text-primary transition-colors">Blog</Link>
+                                </li>
+                                <li>
+                                    <Link href="#" className="hover:text-primary transition-colors">Help Center</Link>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* Legal Column */}
+                        <div className="space-y-4">
+                            <h4 className="text-sm font-semibold tracking-wider uppercase text-foreground">Legal</h4>
+                            <ul className="space-y-3 text-sm text-muted-foreground">
+                                <li>
+                                    <Link href="#" className="hover:text-primary transition-colors">Privacy Policy</Link>
+                                </li>
+                                <li>
+                                    <Link href="#" className="hover:text-primary transition-colors">Terms of Service</Link>
+                                </li>
+                                <li>
+                                    <Link href="#" className="hover:text-primary transition-colors">Cookie Policy</Link>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
-                <div className="mt-10 border-t pt-8 text-center text-sm text-muted-foreground">
-                    © {new Date().getFullYear()} PrepNova. All rights reserved.
+
+                {/* Bottom Section: Separator & Copyright */}
+                <div className="mt-12 md:mt-16 border-t pt-8">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
+                        <p>© {new Date().getFullYear()} PrepNova. All rights reserved.</p>
+                        <div className="flex items-center gap-6">
+                            <Link href="#" className="hover:text-primary transition-colors">Privacy</Link>
+                            <Link href="#" className="hover:text-primary transition-colors">Terms</Link>
+                            <Link href="#" className="hover:text-primary transition-colors">Sitemap</Link>
+                        </div>
+                    </div>
                 </div>
             </div>
         </footer>

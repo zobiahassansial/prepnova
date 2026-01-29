@@ -5,73 +5,87 @@ import { Brain, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export function Navbar() {
     const pathname = usePathname()
     const isDashboard = pathname?.startsWith("/dashboard")
-    // In a real app, we'd check session here to toggle Login/Dashboard links
 
-    if (isDashboard) return null // Don't show public navbar on dashboard
+    if (isDashboard) return null
 
     return (
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="container flex h-16 items-center px-4 md:px-6 justify-between">
-                <Link className="flex items-center gap-2 font-bold text-xl" href="/">
-                    <Brain className="h-6 w-6 text-primary" />
-                    <span>PrepNova</span>
+        // Changed layout: Now it's fixed with padding to create the "Floating" effect
+        <header className="fixed top-0 left-0 right-0 z-50 flex justify-center p-4">
+            <div className="flex w-full max-w-7xl items-center justify-between rounded-full border border-white/20 bg-background/70 px-6 py-3 shadow-xl backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 dark:border-white/10 dark:bg-black/50">
+                
+                {/* Logo Section */}
+                <Link className="flex items-center gap-2 font-bold text-xl hover:opacity-80 transition-opacity" href="/">
+                    <div className="rounded-lg bg-primary/10 p-1">
+                        <Brain className="h-6 w-6 text-primary" />
+                    </div>
+                    <span className="bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                        PrepNova
+                    </span>
                 </Link>
 
+                {/* Desktop Navigation - Centered & Clean */}
                 <nav className="hidden md:flex items-center gap-8">
-                    <Link
-                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-                        href="/"
-                    >
-                        Home
-                    </Link>
-                    <Link
-                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-                        href="#features"
-                    >
-                        Tools
-                    </Link>
-                    <Link
-                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-                        href="#"
-                    >
-                        Learning Hub
-                    </Link>
+                    {["Home", "Tools", "Learning Hub"].map((item) => (
+                        <Link
+                            key={item}
+                            className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group"
+                            href={item === "Home" ? "/" : item === "Tools" ? "#features" : "#"}
+                        >
+                            {item}
+                            {/* Hover Underline Animation */}
+                            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all group-hover:w-full"></span>
+                        </Link>
+                    ))}
                 </nav>
 
-                <div className="hidden md:flex items-center gap-4">
+                {/* Right Actions */}
+                <div className="hidden md:flex items-center gap-3">
+                    <ThemeToggle />
+                    <div className="h-6 w-px bg-border/50 mx-1"></div> {/* Vertical Divider */}
+                    
                     <Link href="/login">
-                        <Button variant="ghost">Log In</Button>
+                        <Button variant="ghost" className="rounded-full hover:bg-primary/10 hover:text-primary">
+                            Log In
+                        </Button>
                     </Link>
                     <Link href="/signup">
-                        <Button>Get Started</Button>
+                        <Button className="rounded-full shadow-lg shadow-primary/20 transition-all hover:scale-105 hover:shadow-primary/30">
+                            Get Started
+                        </Button>
                     </Link>
                 </div>
 
-                {/* Mobile Menu */}
-                <div className="md:hidden">
+                {/* Mobile Menu Trigger */}
+                <div className="md:hidden flex items-center gap-4">
                     <Sheet>
                         <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" className="rounded-full">
                                 <Menu className="h-6 w-6" />
                                 <span className="sr-only">Toggle menu</span>
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="right">
-                            <div className="flex flex-col gap-6 mt-6">
-                                <Link href="/" className="font-medium text-lg">Home</Link>
-                                <Link href="#features" className="font-medium text-lg">Tools</Link>
-                                <Link href="#" className="font-medium text-lg">Learning Hub</Link>
-                                <div className="flex flex-col gap-2 mt-4">
+                        <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                            <div className="flex flex-col gap-6 mt-8">
+                                <Link href="/" className="font-medium text-lg border-b pb-2">Home</Link>
+                                <Link href="#features" className="font-medium text-lg border-b pb-2">Tools</Link>
+                                <Link href="#" className="font-medium text-lg border-b pb-2">Learning Hub</Link>
+                                
+                                <div className="flex items-center justify-between border-b pb-4 pt-2">
+                                    <span className="font-medium text-lg text-muted-foreground">App Theme</span>
+                                    <ThemeToggle />
+                                </div>
+
+                                <div className="flex flex-col gap-3 mt-auto pt-8">
                                     <Link href="/login">
-                                        <Button variant="outline" className="w-full">Log In</Button>
+                                        <Button variant="outline" className="w-full rounded-full h-12">Log In</Button>
                                     </Link>
                                     <Link href="/signup">
-                                        <Button className="w-full">Get Started</Button>
+                                        <Button className="w-full rounded-full h-12 shadow-md">Get Started</Button>
                                     </Link>
                                 </div>
                             </div>
