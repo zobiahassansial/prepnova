@@ -5,12 +5,13 @@ import { ResumeData } from "@/types/resume"
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
-export async function generateResumeContent(currentData: ResumeData): Promise<Partial<ResumeData>> {
+export async function generateResumeContent(currentData: ResumeData, tone?: string): Promise<Partial<ResumeData>> {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     You are an expert resume writer.
     Improve this resume to match the job description (if provided) or general industry standards.
+    Tone: ${tone || "professional"}.
     Optimize for ATS, clarity, and impact.
     Preserve structure and sections.
     
@@ -48,13 +49,14 @@ export async function generateResumeContent(currentData: ResumeData): Promise<Pa
     }
 }
 
-export async function optimizeCoverLetter(coverLetter: string, resumeData: ResumeData): Promise<string> {
+export async function optimizeCoverLetter(coverLetter: string, resumeData: ResumeData, tone?: string): Promise<string> {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     You are a professional career assistant.
     Optimize content to match the job description (if implied).
     Highlight relevant skills and experience.
+    Tone: ${tone || "professional"}.
     Rephrase bullets for ATS optimization.
     Keep formatting unchanged.
 
@@ -81,12 +83,12 @@ export async function optimizeCoverLetter(coverLetter: string, resumeData: Resum
     }
 }
 
-export async function generateCoverLetter(resumeData: ResumeData): Promise<string> {
+export async function generateCoverLetter(resumeData: ResumeData, tone?: string): Promise<string> {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     Write a professional cover letter from scratch.
-    Tone: confident, concise, tailored.
+    Tone: ${tone || "confident, concise, tailored"}.
     Length: one page maximum.
     Do not repeat resume content verbatim.
     
@@ -110,14 +112,14 @@ export async function generateCoverLetter(resumeData: ResumeData): Promise<strin
     }
 }
 
-export async function matchCoverLetterToJob(coverLetter: string, jobDescription: string, resumeData: ResumeData): Promise<string> {
+export async function matchCoverLetterToJob(coverLetter: string, jobDescription: string, resumeData: ResumeData, tone?: string): Promise<string> {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     Rewrite this cover letter to closely match the following job description.
     Use keywords naturally.
     Do not fabricate experience.
-    Tone: confident, tailored, concise.
+    Tone: ${tone || "confident, tailored, concise"}.
     One page maximum.
     
     Job Description:

@@ -9,6 +9,7 @@ type ResumeInput = {
   skills: string[]
   experience: string
   education: string
+  resumeTone?: "professional" | "formal" | "minimal"
 }
 
 export async function generateResumeFromForm(data: ResumeInput) {
@@ -25,10 +26,23 @@ export async function generateResumeFromForm(data: ResumeInput) {
       model: "gemini-1.5-flash"
     })
 
+    const toneInstruction =
+      data.resumeTone === "formal"
+        ? "Use a very formal, corporate tone."
+        : data.resumeTone === "minimal"
+          ? "Use a concise, minimal, modern tone. Short sentences."
+          : "Use a professional, clear, ATS-friendly tone."
+
     const prompt = `
 You are a professional resume writer.
+${toneInstruction}
 
-Create a clean, ATS-friendly resume using the following information.
+Rules:
+- Do NOT invent fake experience
+- Do NOT add sections if data is missing
+- Keep content realistic and ATS-friendly
+
+Create a resume using the following information:
 
 Full Name: ${data.fullName}
 Target Job Title: ${data.jobTitle}
@@ -45,7 +59,7 @@ ${data.experience}
 Education:
 ${data.education}
 
-Output format:
+Output format (plain text only):
 
 Name
 Job Title
@@ -55,15 +69,12 @@ Professional Summary:
 
 Skills:
 - ...
-- ...
 
 Experience:
 - ...
 
 Education:
 - ...
-
-Do not add markdown. Plain text only.
 `
 
     const result = await model.generateContent(prompt)

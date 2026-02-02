@@ -203,9 +203,9 @@ export function ResumeBuilder() {
                                     <TemplateGallery
                                         selected={resumeData.coverTemplate || "modern"}
                                         activeTemplate={activeCoverTemplate}
+                                        type="cover" // Active type
                                         onSelect={(id) => {
-                                            setCoverTemplateTouched(true)
-                                            setResumeData({ ...resumeData, coverTemplate: id as any })
+                                            setResumeData(prev => ({ ...prev, coverTemplate: id as any }))
                                         }}
                                     />
                                 </PopoverContent>
@@ -263,11 +263,7 @@ export function ResumeBuilder() {
                 {/* Preview Pane */}
                 <div className={`bg-muted/30 border rounded-lg flex flex-col min-h-0 ${activeTab === "editor" ? "hidden md:flex" : "flex"}`}>
                     <ResumePreview
-                        data={{
-                            ...resumeData,
-                            template: activeResumeTemplate as any, // Override with derived active template
-                            coverTemplate: activeCoverTemplate as any
-                        }}
+                        data={resumeData}
                         onPageCountChange={setPageCount}
                     />
                 </div>

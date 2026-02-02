@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2, Sparkles, Loader2 } from "lucide-react"
-import { useState } from "react"
+import { useState, useRef } from "react"
 
 interface ResumeFormProps {
     data: ResumeData
@@ -43,13 +43,75 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
 
 
     const [generating, setGenerating] = useState(false)
+    const [showErrors, setShowErrors] = useState(false)
+
+    // Refs for auto-scrolling
+    const fullNameRef = useRef<HTMLInputElement>(null)
+    const emailRef = useRef<HTMLInputElement>(null)
+    const experienceRef = useRef<HTMLButtonElement>(null)
+    const educationRef = useRef<HTMLButtonElement>(null)
+    const skillsRef = useRef<HTMLButtonElement>(null)
+    const jobDescriptionRef = useRef<HTMLTextAreaElement>(null)
+
+    // STRICT Validation Logic
+    const validate = () => {
+        const isFullNameValid = !!data.personalInfo.fullName?.trim()
+        const isEmailValid = !!data.personalInfo.email?.trim()
+        const isJobDescriptionValid = jobDescription.trim().length >= 20
+
+        const hasValidExperience = data.experience.some(res =>
+            res.company.trim() && res.company !== "New Company" &&
+            res.position.trim() && res.position !== "Position" &&
+            res.description.trim().length > 20
+        )
+
+        const hasValidEducation = data.education.some(edu =>
+            edu.school.trim() && edu.school !== "University" &&
+            edu.degree.trim() && edu.degree !== "Degree"
+        )
+
+        const hasValidSkills = data.skills.filter(s => s.trim().length > 0).length >= 2
+
+        return {
+            isFullNameValid,
+            isEmailValid,
+            isJobDescriptionValid,
+            hasValidExperience,
+            hasValidEducation,
+            hasValidSkills,
+            hasContent: hasValidExperience || hasValidEducation || hasValidSkills
+        }
+    }
+
     const { toast } = require("sonner")
 
-    const handleAIGenerate = async () => {
+    const handleAIGenerate = async (e: React.MouseEvent) => {
+        // Prevent default if it's a form submission (though it's a button here)
+        e.preventDefault()
+
+        const { isFullNameValid, isEmailValid, hasValidExperience, hasValidEducation, hasValidSkills, hasContent, isJobDescriptionValid } = validate()
+
+        if (!isFullNameValid || !isEmailValid || !hasContent || !isJobDescriptionValid) {
+            setShowErrors(true)
+            toast.error("Please fill required fields (including Job Description) to use AI")
+
+            // Auto-scroll to first error
+            if (!isFullNameValid) fullNameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+            else if (!isEmailValid) emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+            else if (!isJobDescriptionValid) jobDescriptionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+            else {
+                // Scroll to the first missing/invalid section in order
+                if (!hasValidExperience) experienceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+                else if (!hasValidEducation) educationRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+                else if (!hasValidSkills) skillsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+            }
+            return
+        }
+
         setGenerating(true)
         try {
             const { generateResumeContent } = await import("@/actions/generate-resume")
-            const newContent = await generateResumeContent(data)
+            const newContent = await generateResumeContent(data, data.resumeTone)
 
             onChange({
                 ...data,
@@ -81,15 +143,35 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
 
     return (
         <div className="space-y-6">
-            <div className="bg-primary/5 p-4 rounded-lg flex items-center justify-between">
-                <div>
-                    <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI Assistant</h3>
-                    <p className="text-xs text-muted-foreground">Enhance your resume content automatically.</p>
+            <div className="bg-primary/5 p-4 rounded-lg flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI Assistant</h3>
+                        <p className="text-xs text-muted-foreground">Enhance your resume content automatically.</p>
+                    </div>
                 </div>
-                <Button onClick={handleAIGenerate} disabled={generating} size="sm">
-                    {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    Optimize with AI
-                </Button>
+
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">Tone:</span>
+                        {["professional", "formal", "minimal"].map((tone) => (
+                            <label key={tone} className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="resumeTone"
+                                    checked={data.resumeTone === tone || (!data.resumeTone && tone === "professional")} // Default to professional
+                                    onChange={() => onChange({ ...data, resumeTone: tone as any })}
+                                    className="text-primary focus:ring-primary"
+                                />
+                                <span className="capitalize">{tone}</span>
+                            </label>
+                        ))}
+                    </div>
+                    <Button onClick={handleAIGenerate} disabled={generating} size="sm" className="ml-auto">
+                        {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                        Optimize with AI
+                    </Button>
+                </div>
             </div>
 
             {/* Cover Letter Toggle & Input */}
@@ -105,17 +187,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                         Include Cover Letter
                     </label>
 
-                    {data.includeCover && (
-                        <select
-                            className="bg-transparent border rounded p-1 text-sm"
-                            value={data.coverTemplate || "modern"}
-                            onChange={(e) => onChange({ ...data, coverTemplate: e.target.value as any })}
-                        >
-                            <option value="modern">Modern</option>
-                            <option value="formal">Formal</option>
-                            <option value="minimal">Minimal</option>
-                        </select>
-                    )}
+
                 </div>
 
                 {data.includeCover && (
@@ -126,6 +198,23 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                             placeholder="Write your cover letter here..."
                             className="w-full min-h-[150px] pr-8"
                         />
+
+                        {/* REMOVED TONE SELECTOR - SINGLE SOURCE OF TRUTH */}
+                        {/* <div className="mt-2 flex items-center gap-4 text-sm">
+                            <span className="font-medium">Tone:</span>
+                             {["professional", "formal", "minimal"].map((tone) => (
+                                <label key={tone} className="flex items-center gap-1 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="coverTone"
+                                        checked={data.coverLetterTone === tone || (!data.coverLetterTone && tone === "professional")} // Default to professional
+                                        onChange={() => onChange({ ...data, coverLetterTone: tone as any })}
+                                        className="text-primary focus:ring-primary"
+                                    />
+                                    <span className="capitalize">{tone}</span>
+                                </label>
+                            ))}
+                        </div> */}
                         <div className="absolute top-2 right-2 flex gap-2">
                             <Button
                                 variant="ghost"
@@ -135,7 +224,8 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                     setGenerating(true)
                                     try {
                                         const { generateCoverLetter } = await import("@/actions/generate-resume")
-                                        const generated = await generateCoverLetter(data)
+                                        // Use data.resumeTone instead of data.coverLetterTone
+                                        const generated = await generateCoverLetter(data, data.resumeTone)
                                         onChange({ ...data, coverLetter: generated })
                                         toast.success("Cover letter generated!")
                                     } catch (error) {
@@ -155,14 +245,17 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                 size="sm"
                                 className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
                                 onClick={async () => {
-                                    if (!jobDescription) {
-                                        toast.error("Please enter a Job Description below first")
+                                    if (jobDescription.trim().length < 20) {
+                                        setShowErrors(true)
+                                        toast.error("Please enter a valid Job Description first (min 20 chars)")
+                                        jobDescriptionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
                                         return
                                     }
                                     setGenerating(true)
                                     try {
                                         const { matchCoverLetterToJob } = await import("@/actions/generate-resume")
-                                        const optimized = await matchCoverLetterToJob(data.coverLetter || "", jobDescription, data)
+                                        // Use data.resumeTone instead of data.coverLetterTone
+                                        const optimized = await matchCoverLetterToJob(data.coverLetter || "", jobDescription, data, data.resumeTone)
                                         onChange({ ...data, coverLetter: optimized })
                                         toast.success("Cover letter matched to job!")
                                     } catch (error) {
@@ -185,7 +278,8 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                     setGenerating(true)
                                     try {
                                         const { optimizeCoverLetter } = await import("@/actions/generate-resume")
-                                        const optimized = await optimizeCoverLetter(data.coverLetter || "", data)
+                                        // Use data.resumeTone instead of data.coverLetterTone
+                                        const optimized = await optimizeCoverLetter(data.coverLetter || "", data, data.resumeTone)
                                         onChange({ ...data, coverLetter: optimized })
                                         toast.success("Cover letter optimized!")
                                     } catch (error) {
@@ -207,15 +301,20 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
             {/* Job Description Input (for AI) */}
             <div className="space-y-2 border rounded-lg p-4 bg-muted/20">
                 <Label className="font-semibold flex items-center gap-2">
-                    Target Job Description
-                    <span className="text-xs font-normal text-muted-foreground">(for AI matching)</span>
+                    Target Job Description <span className="text-red-500">*</span>
+                    <span className="text-xs font-normal text-muted-foreground">(Required for AI matching)</span>
                 </Label>
                 <Textarea
+                    ref={jobDescriptionRef}
+                    className={showErrors && jobDescription.trim().length < 20 ? "border-red-500 shake" : ""}
                     placeholder="Paste job description here..."
                     value={jobDescription}
                     onChange={(e) => setJobDescription(e.target.value)}
                     rows={4}
                 />
+                {showErrors && jobDescription.trim().length < 20 && (
+                    <p className="text-xs text-red-500 font-medium">Job description is required for AI matching (Min 20 chars)</p>
+                )}
             </div>
 
             <Accordion type="single" collapsible defaultValue="personal">
@@ -224,16 +323,20 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                     <AccordionTrigger>Personal Information</AccordionTrigger>
                     <AccordionContent className="space-y-4 pt-2">
                         <div className="space-y-2">
-                            <Label>Full Name</Label>
+                            <Label>Full Name <span className="text-red-500">*</span></Label>
                             <Input
+                                ref={fullNameRef}
+                                className={showErrors && !data.personalInfo.fullName ? "border-red-500 shake focus:ring-red-500" : ""}
                                 value={data.personalInfo.fullName}
                                 onChange={(e) => updatePersonalInfo("fullName", e.target.value)}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Email</Label>
+                                <Label>Email <span className="text-red-500">*</span></Label>
                                 <Input
+                                    ref={emailRef}
+                                    className={showErrors && !data.personalInfo.email ? "border-red-500 shake focus:ring-red-500" : ""}
                                     value={data.personalInfo.email}
                                     onChange={(e) => updatePersonalInfo("email", e.target.value)}
                                 />
@@ -279,8 +382,13 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
 
                 {/* Experience */}
                 <AccordionItem value="experience">
-                    <AccordionTrigger>Experience</AccordionTrigger>
+                    <AccordionTrigger ref={experienceRef}>Experience</AccordionTrigger>
                     <AccordionContent className="space-y-4 pt-2">
+                        {showErrors && !validate().hasContent && (
+                            <p className="text-xs text-red-500 mb-2 font-bold animate-pulse">
+                                Add at least one valid: Experience, Education, or Skills (Must have description &gt; 20 chars)
+                            </p>
+                        )}
                         {data.experience.map((exp, index) => (
                             <div key={exp.id} className="border rounded-lg p-4 space-y-3 relative group">
                                 <Button
@@ -300,6 +408,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                     <div className="space-y-1">
                                         <Label className="text-xs">Company</Label>
                                         <Input
+                                            className={showErrors && (!exp.company.trim() || exp.company === "New Company") ? "border-red-500 shake" : ""}
                                             value={exp.company}
                                             onChange={(e) => {
                                                 const newExp = [...data.experience]
@@ -311,6 +420,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                     <div className="space-y-1">
                                         <Label className="text-xs">Position</Label>
                                         <Input
+                                            className={showErrors && (!exp.position.trim() || exp.position === "Position") ? "border-red-500 shake" : ""}
                                             value={exp.position}
                                             onChange={(e) => {
                                                 const newExp = [...data.experience]
@@ -345,8 +455,9 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                     </div>
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs">Description</Label>
+                                    <Label className="text-xs">Description {exp.description && exp.description.trim().length < 20 && showErrors && <span className="text-red-500 text-[10px] ml-2">(Min 20 chars)</span>}</Label>
                                     <Textarea
+                                        className={showErrors && exp.description.trim().length < 20 ? "border-red-500 shake" : ""}
                                         rows={3}
                                         value={exp.description}
                                         onChange={(e) => {
@@ -366,7 +477,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
 
                 {/* Education */}
                 <AccordionItem value="education">
-                    <AccordionTrigger>Education</AccordionTrigger>
+                    <AccordionTrigger ref={educationRef}>Education</AccordionTrigger>
                     <AccordionContent className="space-y-4 pt-2">
                         {data.education.map((edu, index) => (
                             <div key={edu.id} className="border rounded-lg p-4 space-y-3 relative group">
@@ -386,6 +497,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                     <div className="space-y-1">
                                         <Label className="text-xs">School</Label>
                                         <Input
+                                            className={showErrors && (!edu.school.trim() || edu.school === "University") ? "border-red-500 shake" : ""}
                                             value={edu.school}
                                             onChange={(e) => {
                                                 const newEdu = [...data.education]
@@ -397,6 +509,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                     <div className="space-y-1">
                                         <Label className="text-xs">Degree</Label>
                                         <Input
+                                            className={showErrors && (!edu.degree.trim() || edu.degree === "Degree") ? "border-red-500 shake" : ""}
                                             value={edu.degree}
                                             onChange={(e) => {
                                                 const newEdu = [...data.education]
@@ -415,10 +528,15 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                 </AccordionItem>
 
                 <AccordionItem value="skills">
-                    <AccordionTrigger>Skills</AccordionTrigger>
+                    <AccordionTrigger ref={skillsRef}>Skills</AccordionTrigger>
                     <AccordionContent className="pt-2">
-                        <Label className="text-xs mb-2 block">Comma separated list</Label>
+                        <Label className="text-xs mb-2 block">Comma separated list
+                            {showErrors && data.skills.filter(s => s.trim().length > 0).length < 2 && (
+                                <span className="text-red-500 font-bold ml-2">(Please enter at least 2 skills)</span>
+                            )}
+                        </Label>
                         <Textarea
+                            className={showErrors && data.skills.filter(s => s.trim().length > 0).length < 2 ? "border-red-500 shake" : ""}
                             rows={3}
                             value={data.skills.join(", ")}
                             onChange={(e) => onChange({ ...data, skills: e.target.value.split(",").map(s => s.trim()) })}
@@ -427,6 +545,6 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                     </AccordionContent>
                 </AccordionItem>
             </Accordion>
-        </div>
+        </div >
     )
 }

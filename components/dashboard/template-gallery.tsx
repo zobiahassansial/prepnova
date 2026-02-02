@@ -44,16 +44,52 @@ const templates: TemplateOption[] = [
     }
 ]
 
+const coverTemplates: TemplateOption[] = [
+    {
+        id: "basic",
+        name: "Basic",
+        description: "Simple & clean",
+        thumbnailClass: "bg-white p-2 flex flex-col gap-1 border shadow-sm"
+    },
+    {
+        id: "template_modern_pro",
+        name: "Modern Pro",
+        description: "Bold & professional",
+        thumbnailClass: "bg-white p-0 flex flex-col shadow-sm"
+    },
+    {
+        id: "template_sidebar",
+        name: "Sidebar",
+        description: "Structured layout",
+        thumbnailClass: "bg-white flex flex-row shadow-sm h-full"
+    },
+    {
+        id: "template_minimal_elegant",
+        name: "Minimal Elegant",
+        description: "Refined serif style",
+        thumbnailClass: "bg-[#fcfbf9] p-2 flex flex-col items-center shadow-sm"
+    },
+    {
+        id: "template_creative_blocks",
+        name: "Creative Blocks",
+        description: "Unique section headers",
+        thumbnailClass: "bg-white p-2 flex flex-col gap-2 shadow-sm"
+    }
+]
+
 interface TemplateGalleryProps {
     selected: string
     onSelect: (id: string) => void
     activeTemplate: string
+    type?: "resume" | "cover" // Added prop
 }
 
-export function TemplateGallery({ selected, onSelect }: TemplateGalleryProps) {
+export function TemplateGallery({ selected, onSelect, type = "resume" }: TemplateGalleryProps) {
+    const list = type === "cover" ? coverTemplates : templates
+
     return (
         <div className="grid grid-cols-2 gap-4">
-            {templates.map((t) => (
+            {list.map((t) => (
                 <button
                     key={t.id}
                     onClick={() => onSelect(t.id)}
@@ -77,7 +113,7 @@ export function TemplateGallery({ selected, onSelect }: TemplateGalleryProps) {
                                 height: "133%",
                             }}
                         >
-                            <MiniPreview id={t.id} />
+                            <MiniPreview id={t.id} type={type} />
                         </div>
                     </div>
 
@@ -100,7 +136,77 @@ export function TemplateGallery({ selected, onSelect }: TemplateGalleryProps) {
     )
 }
 
-function MiniPreview({ id }: { id: string }) {
+
+function MiniPreview({ id, type = "resume" }: { id: string, type?: "resume" | "cover" }) {
+    // If cover type, return simplified text body versions matching the aesthetic
+    if (type === "cover") {
+        switch (id) {
+            case "basic":
+                return (
+                    <div className="p-4 space-y-2 font-sans text-xs text-left">
+                        <div className="font-bold text-lg border-b pb-1">Name</div>
+                        <div className="space-y-1 pt-2">
+                            <div className="h-1 bg-gray-200 w-full mb-2"></div>
+                            <div className="h-1 bg-gray-200 w-full"></div>
+                            <div className="h-1 bg-gray-200 w-full"></div>
+                        </div>
+                    </div>
+                )
+            case "template_modern_pro":
+                return (
+                    <div className="font-sans text-xs h-full text-left">
+                        <div className="bg-slate-900 text-white p-2 text-center">
+                            <div className="font-bold text-lg tracking-wider">NAME</div>
+                        </div>
+                        <div className="p-4 space-y-2">
+                            <div className="h-1 bg-gray-200 w-full mb-1"></div>
+                            <div className="h-1 bg-gray-200 w-full"></div>
+                        </div>
+                    </div>
+                )
+            case "template_sidebar":
+                return (
+                    <div className="flex w-full h-full text-left font-sans">
+                        <div className="w-1/3 bg-slate-100 p-2 border-r">
+                            <div className="h-8 w-8 bg-slate-300 rounded-full mx-auto mb-2"></div>
+                        </div>
+                        <div className="flex-1 p-2 space-y-2">
+                            <div className="font-bold text-lg border-b-2 border-slate-800">NAME</div>
+                            <div className="h-1 bg-gray-100 w-full"></div>
+                            <div className="h-1 bg-gray-100 w-full"></div>
+                        </div>
+                    </div>
+                )
+            case "template_minimal_elegant":
+                return (
+                    <div className="p-4 h-full text-center font-serif text-xs">
+                        <div className="mb-4">
+                            <div className="text-xl italic">Your Name</div>
+                        </div>
+                        <div className="text-left space-y-1">
+                            <div className="h-1 bg-gray-100 w-full"></div>
+                            <div className="h-1 bg-gray-100 w-full"></div>
+                        </div>
+                    </div>
+                )
+            case "template_creative_blocks":
+                return (
+                    <div className="p-4 h-full font-sans text-xs text-left">
+                        <div className="mb-2">
+                            <div className="bg-black text-white inline-block px-2 py-1 text-lg font-bold -rotate-1">NAME</div>
+                        </div>
+                        <div className="space-y-1">
+                            <div className="h-1 bg-gray-100 w-full"></div>
+                            <div className="h-1 bg-gray-100 w-full"></div>
+                        </div>
+                    </div>
+                )
+            default:
+                return <div className="bg-gray-100 w-full h-full flex items-center justify-center text-gray-400">?</div>
+        }
+    }
+
+    // RESUME PREVIEWS (Existing)
     switch (id) {
         case "basic":
             return (

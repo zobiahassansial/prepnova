@@ -12,10 +12,10 @@ import { toast } from "sonner"
 import { Brain, Loader2, Eye, EyeOff } from "lucide-react"
 import { signInWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup } from "firebase/auth"
 import { auth, db } from "@/lib/firebase"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
 
 const LoginSchema = z.object({
-    email: z.string().email("Invalid email address"),
+    identifier: z.string().min(1, "Email or username is required"),
     password: z.string().min(1, "Password is required"),
 })
 
@@ -42,7 +42,7 @@ export default function LoginPage() {
     const form = useForm<z.infer<typeof LoginSchema>>({
         resolver: zodResolver(LoginSchema),
         defaultValues: {
-            email: "",
+            identifier: "",
             password: "",
         },
     })
@@ -50,7 +50,32 @@ export default function LoginPage() {
     async function onSubmit(values: z.infer<typeof LoginSchema>) {
         setLoading(true)
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password)
+            let email = values.identifier
+
+            // Resolve email from username if needed
+            if (!values.identifier.includes("@")) {
+                const q = query(
+                    collection(db, "users"),
+                    where("username", "==", values.identifier.toLowerCase())
+                )
+                const snap = await getDocs(q)
+                if (snap.empty) {
+                    toast.error("User not found.")
+                    setLoading(false)
+                    return
+                }
+                email = snap.docs[0].data().email
+            }
+
+            const userCredential = await signInWithEmailAndPassword(auth, email, values.password)
+
+            // Check if email is verified
+            if (!userCredential.user.emailVerified) {
+                await auth.signOut()
+                toast.error("Please verify your email first.")
+                setLoading(false)
+                return
+            }
             const idToken = await userCredential.user.getIdToken()
 
             // Exchange Firebase ID Token for NextAuth Session Cookie
@@ -83,14 +108,16 @@ export default function LoginPage() {
     }
 
     const handleForgotPassword = async () => {
-        const email = form.getValues("email")
-        if (!email || !z.string().email().safeParse(email).success) {
-            toast.error("Please enter a valid email address first.")
+        const identifier = form.getValues("identifier")
+        const isEmail = z.string().email().safeParse(identifier).success
+
+        if (!identifier || !isEmail) {
+            toast.error("Please enter a valid email address to reset password.")
             return
         }
 
         try {
-            await sendPasswordResetEmail(auth, email)
+            await sendPasswordResetEmail(auth, identifier)
             toast.success("Password reset email sent! Check your inbox.")
         } catch (error) {
             toast.error("Failed to send reset email.")
@@ -129,6 +156,11 @@ export default function LoginPage() {
             toast.success("Logged in with Google!")
 
             if (!snap.exists() || !snap.data()?.onboardingCompleted) {
+                // Check if username exists (Step 5)
+                if (!snap.exists() || !snap.data()?.username) {
+                    router.push("/onboarding/username")
+                    return
+                }
                 router.push("/onboarding")
             } else {
                 router.push(callbackUrl)
@@ -174,14 +206,14 @@ export default function LoginPage() {
                 <CardContent>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Email</label>
+                            <label className="text-sm font-medium">Email or Username</label>
                             <input
-                                {...form.register("email")}
+                                {...form.register("identifier")}
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                placeholder="student@example.com"
+                                placeholder="student@example.com or username"
                             />
-                            {form.formState.errors.email && (
-                                <p className="text-sm text-red-500">{form.formState.errors.email.message}</p>
+                            {form.formState.errors.identifier && (
+                                <p className="text-sm text-red-500">{form.formState.errors.identifier.message}</p>
                             )}
                         </div>
                         <div className="space-y-2">

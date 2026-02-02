@@ -60,7 +60,9 @@ export interface ResumeData {
     sections: ResumeSection[] // Order of sections
     includeCover?: boolean
     coverLetter?: string
-    coverTemplate?: "formal" | "modern" | "minimal"
+    coverTemplate?: "basic" | "modern" | "classic" | "minimal" | "template_modern_pro" | "template_sidebar" | "template_minimal_elegant" | "template_creative_blocks"
+    resumeTone?: "professional" | "formal" | "minimal"
+
     createdAt?: any
     updatedAt?: any
 }
