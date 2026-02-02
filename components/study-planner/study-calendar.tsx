@@ -3,32 +3,28 @@
 import { useState } from "react"
 import { Calendar, momentLocalizer, Views } from "react-big-calendar"
 import moment from "moment"
+import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop"
 import "react-big-calendar/lib/css/react-big-calendar.css"
+import "react-big-calendar/lib/addons/dragAndDrop/styles.css"
 import { Card, CardContent } from "@/components/ui/card"
 
 const localizer = momentLocalizer(moment)
+const DnDCalendar = withDragAndDrop(Calendar) as any
 
 interface StudyCalendarProps {
-    tasks: any[]
+    events: any[]
     onSelectEvent?: (event: any) => void
     onSelectSlot?: (slotInfo: any) => void
+    onDropFromOutside?: (item: any) => void
+    onEventDrop?: (args: any) => void
+    resizable?: boolean
 }
 
-export function StudyCalendar({ tasks, onSelectEvent, onSelectSlot }: StudyCalendarProps) {
+export function StudyCalendar({ events, onSelectEvent, onSelectSlot, onDropFromOutside, onEventDrop, resizable }: StudyCalendarProps) {
     const [view, setView] = useState(Views.WEEK)
 
-    const events = tasks.map(t => {
-        let start = new Date(t.dueDate.toDate ? t.dueDate.toDate() : t.dueDate)
-        let end = new Date(start.getTime() + (t.duration || 60) * 60000)
+    // Events are now passed in formatted
 
-        return {
-            id: t.id,
-            title: t.title,
-            start,
-            end,
-            resource: t
-        }
-    })
 
     const eventStyleGetter = (event: any) => {
         const priority = event.resource.priority
@@ -36,7 +32,7 @@ export function StudyCalendar({ tasks, onSelectEvent, onSelectSlot }: StudyCalen
         if (priority === "High") backgroundColor = "#ef4444" // red-500
         if (priority === "Low") backgroundColor = "#22c55e" // green-500
 
-        if (event.resource.isCompleted) backgroundColor = "#9ca3af" // gray-400
+        if (event.resource.status === 'completed') backgroundColor = "#9ca3af" // gray-400
 
         return {
             style: {
@@ -53,7 +49,7 @@ export function StudyCalendar({ tasks, onSelectEvent, onSelectSlot }: StudyCalen
     return (
         <Card className="h-full border-none shadow-none">
             <CardContent className="h-[600px] p-0">
-                <Calendar
+                <DnDCalendar
                     localizer={localizer}
                     events={events} // Cast to any if type conflicts occur
                     startAccessor="start"
@@ -66,6 +62,9 @@ export function StudyCalendar({ tasks, onSelectEvent, onSelectSlot }: StudyCalen
                     selectable
                     eventPropGetter={eventStyleGetter}
                     views={["month", "week", "day"]}
+                    onEventDrop={onEventDrop}
+                    onDropFromOutside={onDropFromOutside}
+                    resizable={resizable}
                 />
             </CardContent>
         </Card>
