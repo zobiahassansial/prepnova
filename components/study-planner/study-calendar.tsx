@@ -20,53 +20,122 @@ interface StudyCalendarProps {
     resizable?: boolean
 }
 
-export function StudyCalendar({ events, onSelectEvent, onSelectSlot, onDropFromOutside, onEventDrop, resizable }: StudyCalendarProps) {
+export function StudyCalendar({
+    events,
+    onSelectEvent,
+    onSelectSlot,
+    onDropFromOutside,
+    onEventDrop,
+    resizable
+}: StudyCalendarProps) {
     const [view, setView] = useState(Views.WEEK)
 
-    // Events are now passed in formatted
-
-
+    /* -------------------------------
+       TASK VISUAL PRIORITY (FIXED)
+    --------------------------------*/
     const eventStyleGetter = (event: any) => {
-        const priority = event.resource.priority
-        let backgroundColor = "#3b82f6" // blue-500
-        if (priority === "High") backgroundColor = "#ef4444" // red-500
-        if (priority === "Low") backgroundColor = "#22c55e" // green-500
+        const priority = event.resource?.priority
+        let backgroundColor = "#eab308" // Low → Yellow
 
-        if (event.resource.status === 'completed') backgroundColor = "#9ca3af" // gray-400
+        if (priority === "Medium") backgroundColor = "#f97316" // Orange
+        if (priority === "High") backgroundColor = "#ef4444" // Red
+        if (event.resource?.status === "completed") backgroundColor = "#22c55e" // Green
 
         return {
             style: {
                 backgroundColor,
-                borderRadius: "4px",
-                opacity: 0.8,
-                color: "white",
-                border: "0px",
-                display: "block"
+                borderRadius: "8px",
+                opacity: 1,
+                color: "#ffffff",
+                border: "none",
+                padding: "6px 8px",
+                fontWeight: 600,
+                boxShadow: "0 6px 14px rgba(0,0,0,0.25)",
+                zIndex: 5
             }
         }
     }
 
+    /* -------------------------------
+       TODAY COLUMN (STRONGER)
+    --------------------------------*/
+    const dayPropGetter = (date: Date) => {
+        const today = new Date()
+        const isToday =
+            date.getDate() === today.getDate() &&
+            date.getMonth() === today.getMonth() &&
+            date.getFullYear() === today.getFullYear()
+
+        if (isToday) {
+            return {
+                style: {
+                    backgroundColor: "rgba(59,130,246,0.15)", // stronger blue tint
+                    borderLeft: "2px solid #60a5fa",
+                    borderRight: "2px solid #60a5fa"
+                }
+            }
+        }
+        return {}
+    }
+
     return (
-        <Card className="h-full border-none shadow-none">
-            <CardContent className="h-[600px] p-0">
+        <Card className="h-full border-none shadow-none bg-transparent">
+            <CardContent className="h-[650px] p-0">
                 <DnDCalendar
                     localizer={localizer}
-                    events={events} // Cast to any if type conflicts occur
+                    events={events}
                     startAccessor="start"
                     endAccessor="end"
-                    style={{ height: "100%" }}
                     view={view}
                     onView={(v: any) => setView(v)}
+                    selectable
                     onSelectEvent={onSelectEvent}
                     onSelectSlot={onSelectSlot}
-                    selectable
-                    eventPropGetter={eventStyleGetter}
-                    views={["month", "week", "day"]}
                     onEventDrop={onEventDrop}
                     onDropFromOutside={onDropFromOutside}
                     resizable={resizable}
+                    views={["month", "week", "day"]}
+                    eventPropGetter={eventStyleGetter}
+                    dayPropGetter={dayPropGetter}
+                    style={{ height: "100%" }}
                 />
             </CardContent>
+
+            {/* GLOBAL CALENDAR VISIBILITY FIX */}
+            <style jsx global>{`
+        .rbc-time-view {
+          border: none;
+        }
+
+        .rbc-time-header {
+          border-bottom: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .rbc-time-slot {
+          border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .rbc-timeslot-group {
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .rbc-time-gutter {
+          color: rgba(255,255,255,0.75);
+          font-weight: 500;
+          width: 70px;
+        }
+
+        .rbc-header {
+          color: #ffffff;
+          font-weight: 600;
+          padding: 8px 0;
+        }
+
+        .rbc-current-time-indicator {
+          background-color: #22c55e;
+          height: 2px;
+        }
+      `}</style>
         </Card>
     )
 }

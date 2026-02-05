@@ -1,6 +1,6 @@
 "use server"
 
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { getGeminiModel } from "@/lib/gemini"
 
 export async function generateInterviewResponse(history: any[]) {
   const apiKey = process.env.GEMINI_API_KEY
@@ -10,11 +10,7 @@ export async function generateInterviewResponse(history: any[]) {
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash"
-    })
+    const model = getGeminiModel()
 
     const systemPrompt = `
 You are a professional hiring manager conducting a behavioral interview.

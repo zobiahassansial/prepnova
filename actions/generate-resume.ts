@@ -2,11 +2,13 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { ResumeData } from "@/types/resume"
+import { getGeminiModel } from "@/lib/gemini"
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+// Removed local genAI initialization to use shared config
+
 
 export async function generateResumeContent(currentData: ResumeData, tone?: string): Promise<Partial<ResumeData>> {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = getGeminiModel()
 
     const prompt = `
     You are an expert resume writer.
@@ -50,7 +52,7 @@ export async function generateResumeContent(currentData: ResumeData, tone?: stri
 }
 
 export async function optimizeCoverLetter(coverLetter: string, resumeData: ResumeData, tone?: string): Promise<string> {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = getGeminiModel()
 
     const prompt = `
     You are a professional career assistant.
@@ -84,7 +86,7 @@ export async function optimizeCoverLetter(coverLetter: string, resumeData: Resum
 }
 
 export async function generateCoverLetter(resumeData: ResumeData, tone?: string): Promise<string> {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = getGeminiModel()
 
     const prompt = `
     Write a professional cover letter from scratch.
@@ -113,7 +115,7 @@ export async function generateCoverLetter(resumeData: ResumeData, tone?: string)
 }
 
 export async function matchCoverLetterToJob(coverLetter: string, jobDescription: string, resumeData: ResumeData, tone?: string): Promise<string> {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = getGeminiModel()
 
     const prompt = `
     Rewrite this cover letter to closely match the following job description.

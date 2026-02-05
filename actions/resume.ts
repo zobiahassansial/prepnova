@@ -1,6 +1,6 @@
 "use server"
 
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { getGeminiModel } from "@/lib/gemini"
 
 type ResumeInput = {
   fullName: string
@@ -20,11 +20,7 @@ export async function generateResumeFromForm(data: ResumeInput) {
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash"
-    })
+    const model = getGeminiModel()
 
     const toneInstruction =
       data.resumeTone === "formal"

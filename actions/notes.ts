@@ -1,6 +1,6 @@
 "use server"
 
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { getGeminiModel } from "@/lib/gemini"
 const pdf = require("pdf-parse")
 
 import mammoth from "mammoth"
@@ -41,8 +41,7 @@ export async function processAndSummarizeNote(fileUrl: string, fileType: string)
         const apiKey = process.env.GEMINI_API_KEY
         if (!apiKey) return { error: "Server missing GEMINI_API_KEY" }
 
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+        const model = getGeminiModel()
 
         const prompt = `
             Summarize the following notes into a structured format with:
