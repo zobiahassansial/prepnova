@@ -32,11 +32,20 @@ export async function getDashboardStats(userId: string) {
     ])
 
     // 3. Process Activity Logs
-    const activityLogs = logsSnap.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt.toDate() // Convert Timestamp to Date for client serialization
-    })).sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime()) as any[]
+    const activityLogs = logsSnap.docs.map(doc => {
+      const data = doc.data()
+      // Helper to safely convert standard timestamps if they exist
+      const createdAt = data.createdAt?.toMillis?.() || data.createdAt?.toDate?.()?.getTime() || 0
+
+      return {
+        id: doc.id,
+        ...data,
+        createdAt,
+        // Ensure other common timestamp fields are primitives if they exist
+        updatedAt: data.updatedAt?.toMillis?.() || undefined,
+        timestamp: data.timestamp?.toMillis?.() || undefined
+      }
+    }).sort((a: any, b: any) => b.createdAt - a.createdAt) as any[]
 
     // Calculate Study Hours from logs
     // Assuming logs with action 'study_session' have a 'value' field in minutes

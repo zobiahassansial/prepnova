@@ -33,7 +33,7 @@ export interface StudyActivityLog {
     id: string
     userId: string
     taskId: string
-    action: "created" | "scheduled" | "completed" | "missed" | "rescheduled" | "started"
+    action: "created" | "scheduled" | "completed" | "missed" | "rescheduled" | "started" | "deleted"
     timestamp: Timestamp
     details?: string
 }

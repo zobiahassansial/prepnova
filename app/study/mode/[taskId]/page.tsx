@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
@@ -19,7 +19,71 @@ export default function StudyModePage() {
     const [task, setTask] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [timerActive, setTimerActive] = useState(false)
-    const [seconds, setSeconds] = useState(0)
+    const [seconds, setSeconds] = useState<number | null>(null)
+
+    // Refs for Audio and Interval
+    const audioContextRef = useRef<AudioContext | null>(null)
+    const alarmIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            stopAlarmLoop()
+        }
+    }, [])
+
+    const stopAlarmLoop = () => {
+        if (alarmIntervalRef.current) {
+            clearInterval(alarmIntervalRef.current)
+            alarmIntervalRef.current = null
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close().catch(e => console.error("Error closing AudioContext:", e))
+            audioContextRef.current = null
+        }
+    }
+
+    const playSingleBeep = (ctx: AudioContext) => {
+        try {
+            const osc = ctx.createOscillator()
+            const gainNode = ctx.createGain()
+            const now = ctx.currentTime
+
+            osc.type = "sine"
+            osc.frequency.setValueAtTime(700, now) // Soft 700Hz sine wave
+
+            // Short beep envelope (~200ms) with fade in/out
+            gainNode.gain.setValueAtTime(0, now)
+            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05) // Increased volume
+            gainNode.gain.setValueAtTime(0.3, now + 0.15) // Sustain
+            gainNode.gain.linearRampToValueAtTime(0, now + 0.2) // Fade out
+
+            osc.connect(gainNode)
+            gainNode.connect(ctx.destination)
+
+            osc.start(now)
+            osc.stop(now + 0.2)
+        } catch (e) {
+            console.error("Single beep failed", e)
+        }
+    }
+
+    const startAlarmLoop = () => {
+        // Ensure context exists (created in toggleTimer)
+        if (!audioContextRef.current) return
+
+        const ctx = audioContextRef.current
+
+        // Play first beep immediately
+        if (ctx.state === 'suspended') ctx.resume()
+        playSingleBeep(ctx)
+
+        // Loop every 700ms
+        alarmIntervalRef.current = setInterval(() => {
+            if (ctx.state === 'suspended') ctx.resume()
+            playSingleBeep(ctx)
+        }, 700)
+    }
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -41,8 +105,11 @@ export default function StudyModePage() {
                 let snap = await getDoc(ref)
 
                 if (snap.exists()) {
-                    setTask({ id: snap.id, ...snap.data() })
+                    const data = snap.data()
+                    setTask({ id: snap.id, ...data })
+                    setSeconds(data.durationMinutes * 60)
                 }
+
             } catch (e) {
                 console.error(e)
             } finally {
@@ -54,17 +121,40 @@ export default function StudyModePage() {
     }, [user, taskId])
 
     useEffect(() => {
-        let interval: any
-        if (timerActive) {
-            interval = setInterval(() => {
-                setSeconds(s => s + 1)
-            }, 1000)
-        }
+        if (!timerActive || seconds === null) return
+
+        const interval = setInterval(() => {
+            setSeconds(prev => {
+                if (!prev || prev <= 1) {
+                    clearInterval(interval)
+                    setTimerActive(false)
+                    // Trigger looping alarm when timer hits 0
+                    startAlarmLoop()
+                    return 0
+                }
+                return prev - 1
+            })
+        }, 1000)
+
         return () => clearInterval(interval)
-    }, [timerActive])
+    }, [timerActive, seconds])
+
 
     const toggleTimer = async () => {
         if (!timerActive) {
+            // Unlock/Initialize AudioContext on User Gesture (Start Focus)
+            try {
+                const Ctx = window.AudioContext || (window as any).webkitAudioContext
+                if (!audioContextRef.current) {
+                    audioContextRef.current = new Ctx()
+                }
+                if (audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume()
+                }
+            } catch (e) {
+                console.warn("AudioContext init failed", e)
+            }
+
             // Start
             setTimerActive(true)
             if (user) await logStudyActivity(user.uid, taskId, "started", "Study session started")
@@ -75,9 +165,12 @@ export default function StudyModePage() {
     }
 
     const handleComplete = async () => {
+        // Stop audio immediately on finish
+        stopAlarmLoop()
+
         if (!user || !task) return
         await updateDoc(doc(db, "study_tasks", taskId), { status: "completed" })
-        await logStudyActivity(user.uid, taskId, "completed", `Completed after ${Math.floor(seconds / 60)} minutes`)
+        await logStudyActivity(user.uid, taskId, "completed", `Completed after ${Math.floor((seconds || 0) / 60)} minutes`)
         router.push("/dashboard/study-planner")
     }
 
@@ -103,7 +196,8 @@ export default function StudyModePage() {
                 <CardContent className="space-y-6">
                     <div className="flex flex-col items-center justify-center p-12 bg-muted/20 rounded-lg">
                         <div className="text-6xl font-mono font-bold tracking-widest mb-8">
-                            {formatTime(seconds)}
+                            {seconds !== null ? formatTime(seconds) : "00:00"}
+
                         </div>
 
                         <div className="flex gap-4">

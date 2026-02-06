@@ -1,8 +1,10 @@
-"use client"
+"use server"
 
-import { db } from "@/lib/firebase"
-import { collection, addDoc, updateDoc, doc, Timestamp, getDoc, arrayUnion, deleteDoc, query, where, getDocs } from "firebase/firestore"
-import { StudyTask, StudyActivityLog, Priority, Difficulty, TaskStatus } from "@/types/study-planner"
+
+
+import { adminDb } from "@/lib/firebase-admin"
+import { StudyTask, StudyActivityLog, Priority, Difficulty } from "@/types/study-planner"
+import { FieldValue, Timestamp } from "firebase-admin/firestore"
 
 // STRICT SCOPE: Only 'study_tasks' and 'study_schedule' are allowing writes.
 const TASKS_COLLECTION = "study_tasks"
@@ -11,8 +13,6 @@ const LOG_COLLECTION = "study_activity_log"
 
 /**
  * Creates a new unscheduled study task.
- * Atomic, max duration checked elsewhere but enforced loosely here? 
- * Actually strict rules say max 90m. Let's enforce it.
  */
 export async function createStudyTask(userId: string, data: {
     title: string
@@ -36,11 +36,11 @@ export async function createStudyTask(userId: string, data: {
         durationMinutes: data.durationMinutes,
         status: "unscheduled", // Always starts unscheduled
         deadline: null,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        createdAt: Timestamp.now() as any,
+        updatedAt: Timestamp.now() as any
     }
 
-    const docRef = await addDoc(collection(db, TASKS_COLLECTION), task)
+    const docRef = await adminDb.collection(TASKS_COLLECTION).add(task)
     await logStudyActivity(userId, docRef.id, "created", `Task created: ${data.title}`)
     return docRef.id
 }
@@ -50,39 +50,43 @@ export async function createStudyTask(userId: string, data: {
  * Updates task status and creates/updates schedule entry.
  */
 export async function scheduleStudyTask(userId: string, taskId: string, date: Date, time: string) {
-    // 1. Update Task Status
-    const taskRef = doc(db, TASKS_COLLECTION, taskId)
-    await updateDoc(taskRef, {
-        status: "scheduled",
-        updatedAt: Timestamp.now()
+
+    // ✅ REMOVE OLD SCHEDULE FIRST
+    const existingQuery = adminDb.collection(SCHEDULE_COLLECTION)
+        .where("userId", "==", userId)
+        .where("taskId", "==", taskId)
+
+    const existingSnap = await existingQuery.get()
+    const batch = adminDb.batch()
+
+    existingSnap.docs.forEach((doc) => {
+        batch.delete(doc.ref)
     })
 
-    // 2. Add to Schedule (For now, simplified - might need check for existing schedule entry)
-    // In a real app we'd upsert or check for existing. 
-    // For simplicity, we just add. A more robust impl would query first.
-    // However, to keep it simple effectively 'scheduling' just adds a record.
-    // If re-scheduling, we should ideally find the old schedule doc and update it.
-    // Let's assume for this MVP we just track it in the task doc primarily?
-    // No, strict schema says `study_schedule` collection.
+    // ✅ UPDATE TASK STATUS
+    const taskRef = adminDb.collection(TASKS_COLLECTION).doc(taskId)
+    batch.update(taskRef, {
+        status: "scheduled",
+        updatedAt: Timestamp.now() as any
+    })
 
-    // For MVP efficiency in this "Add" action, we push a new doc.
-    // Cleanup of old schedule docs is a "nice to have" or we just query by latest?
-    // Let's stick to the prompt's `study_schedule` logic.
+    // ✅ ADD NEW SCHEDULE
+    const taskSnap = await taskRef.get()
+    const taskData = taskSnap.data() as StudyTask
+    const duration = taskData?.durationMinutes || 60
 
-    // Fetch task to get duration
-    const taskSnap = await getDoc(doc(db, TASKS_COLLECTION, taskId))
-    const duration = taskSnap.exists() ? taskSnap.data().durationMinutes : 60
-
-    await addDoc(collection(db, SCHEDULE_COLLECTION), {
+    const newScheduleRef = adminDb.collection(SCHEDULE_COLLECTION).doc()
+    batch.set(newScheduleRef, {
         userId,
         taskId,
-        scheduledDate: Timestamp.fromDate(date),
+        scheduledDate: Timestamp.fromDate(date) as any,
         scheduledTime: time,
         durationMinutes: duration
     })
 
-    await logStudyActivity(userId, taskId, "scheduled", `Scheduled for ${date.toDateString()} at ${time}`)
+    await batch.commit()
 }
+
 
 /**
  * Logs activity strictly for the planner module.
@@ -93,14 +97,8 @@ export async function logStudyActivity(
     action: StudyActivityLog["action"],
     details?: string
 ) {
-    await addDoc(collection(db, LOG_COLLECTION), {
-        userId,
-        taskId,
-        action,
-        timestamp: Timestamp.now(),
-        details
-    })
-    await addDoc(collection(db, LOG_COLLECTION), {
+    // Fire and forget log, but await it to ensure it happens
+    await adminDb.collection(LOG_COLLECTION).add({
         userId,
         taskId,
         action,
@@ -115,16 +113,21 @@ export async function logStudyActivity(
 export async function unscheduleStudyTask(userId: string, scheduleId: string, taskId: string) {
     if (!scheduleId) return;
 
+    const batch = adminDb.batch()
+
     // 1. Delete Schedule Doc
-    await deleteDoc(doc(db, SCHEDULE_COLLECTION, scheduleId))
+    const schedRef = adminDb.collection(SCHEDULE_COLLECTION).doc(scheduleId)
+    batch.delete(schedRef)
 
     // 2. Update Task Status
-    await updateDoc(doc(db, TASKS_COLLECTION, taskId), {
+    const taskRef = adminDb.collection(TASKS_COLLECTION).doc(taskId)
+    batch.update(taskRef, {
         status: "unscheduled",
         updatedAt: Timestamp.now()
     })
 
-    await logStudyActivity(userId, taskId, "rescheduled", " moved to unscheduled")
+    await batch.commit()
+    await logStudyActivity(userId, taskId, "rescheduled", "Moved to unscheduled")
 }
 
 /**
@@ -144,14 +147,12 @@ export async function checkScheduleConflict(userId: string, date: Date, time: st
     const endOfDay = new Date(date)
     endOfDay.setHours(23, 59, 59, 999)
 
-    const q = query(
-        collection(db, SCHEDULE_COLLECTION),
-        where("userId", "==", userId),
-        where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
-        where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
-    )
+    const q = adminDb.collection(SCHEDULE_COLLECTION)
+        .where("userId", "==", userId)
+        .where("scheduledDate", ">=", Timestamp.fromDate(startOfDay))
+        .where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
 
-    const snapshot = await getDocs(q)
+    const snapshot = await q.get()
 
     for (const docSnap of snapshot.docs) {
         if (excludeScheduleId && docSnap.id === excludeScheduleId) continue
@@ -159,13 +160,15 @@ export async function checkScheduleConflict(userId: string, date: Date, time: st
         const data = docSnap.data()
         let existingDuration = data.durationMinutes
         if (!existingDuration) {
-            const taskSnap = await getDoc(doc(db, TASKS_COLLECTION, data.taskId))
-            if (taskSnap.exists()) existingDuration = taskSnap.data().durationMinutes
+            const taskSnap = await adminDb.collection(TASKS_COLLECTION).doc(data.taskId).get()
+            if (taskSnap.exists) existingDuration = taskSnap.data()?.durationMinutes
         }
 
         const existingTime = data.scheduledTime
         const [h, m] = existingTime.split(":").map(Number)
-        const existingStart = data.scheduledDate.toDate()
+        // Check if it's a Firestore Timestamp or Date
+        const scheduledDateRaw = data.scheduledDate
+        const existingStart = scheduledDateRaw.toDate ? scheduledDateRaw.toDate() : new Date(scheduledDateRaw)
         existingStart.setHours(h, m, 0, 0)
         const existingEnd = new Date(existingStart.getTime() + (existingDuration || 60) * 60000)
 
@@ -187,25 +190,88 @@ export async function checkDailyLimit(userId: string, date: Date, addedDurationM
     const endOfDay = new Date(date)
     endOfDay.setHours(23, 59, 59, 999)
 
-    const q = query(
-        collection(db, SCHEDULE_COLLECTION),
-        where("userId", "==", userId),
-        where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
-        where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
-    )
+    const q = adminDb.collection(SCHEDULE_COLLECTION)
+        .where("userId", "==", userId)
+        .where("scheduledDate", ">=", Timestamp.fromDate(startOfDay))
+        .where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
 
-    const snapshot = await getDocs(q)
+    const snapshot = await q.get()
     let totalMinutes = 0
 
     for (const docSnap of snapshot.docs) {
         const data = docSnap.data()
         let duration = data.durationMinutes
         if (!duration) {
-            const taskSnap = await getDoc(doc(db, TASKS_COLLECTION, data.taskId))
-            if (taskSnap.exists()) duration = taskSnap.data().durationMinutes
+            const taskSnap = await adminDb.collection(TASKS_COLLECTION).doc(data.taskId).get()
+            if (taskSnap.exists) duration = taskSnap.data()?.durationMinutes
         }
         totalMinutes += (duration || 0)
     }
 
     return (totalMinutes + addedDurationMinutes) > (6 * 60)
+}
+
+/**
+ * Deletes a single task and its schedule entry if exists.
+ */
+export async function deleteStudyTask(userId: string, taskId: string) {
+    // 1. Check/Delete Schedule
+    const schedQuery = adminDb.collection(SCHEDULE_COLLECTION)
+        .where("userId", "==", userId)
+        .where("taskId", "==", taskId)
+
+    const schedSnap = await schedQuery.get()
+    const batch = adminDb.batch()
+
+    schedSnap.docs.forEach(d => batch.delete(d.ref))
+
+    // 2. Delete Task
+    const taskRef = adminDb.collection(TASKS_COLLECTION).doc(taskId)
+    batch.delete(taskRef)
+
+    await batch.commit()
+    await logStudyActivity(userId, taskId, "deleted", "Task deleted permanently")
+}
+
+/**
+ * Deletes ALL scheduled tasks PERMANENTLY.
+ * Removes tasks with status='scheduled' AND their schedule entries.
+ */
+export async function deleteAllScheduledTasks(userId: string) {
+    const batch = adminDb.batch()
+
+    // 1. Delete all schedule docs
+    const schedQuery = adminDb.collection(SCHEDULE_COLLECTION).where("userId", "==", userId)
+    const schedSnap = await schedQuery.get()
+    schedSnap.docs.forEach(d => batch.delete(d.ref))
+
+    // 2. Delete all tasks with status='scheduled'
+    const taskQuery = adminDb.collection(TASKS_COLLECTION)
+        .where("userId", "==", userId)
+        .where("status", "==", "scheduled")
+
+    const taskSnap = await taskQuery.get()
+    taskSnap.docs.forEach(d => batch.delete(d.ref))
+
+    await batch.commit()
+    await logStudyActivity(userId, "BATCH", "deleted", "Deleted all scheduled tasks permanently")
+}
+
+/**
+ * Deletes ALL unscheduled tasks PERMANENTLY.
+ * Removes tasks with status='unscheduled'.
+ */
+export async function deleteAllUnscheduledTasks(userId: string) {
+    const batch = adminDb.batch()
+
+    // 1. Delete all tasks with status='unscheduled'
+    const taskQuery = adminDb.collection(TASKS_COLLECTION)
+        .where("userId", "==", userId)
+        .where("status", "==", "unscheduled")
+
+    const taskSnap = await taskQuery.get()
+    taskSnap.docs.forEach(d => batch.delete(d.ref))
+
+    await batch.commit()
+    await logStudyActivity(userId, "BATCH", "deleted", "Deleted all unscheduled tasks")
 }

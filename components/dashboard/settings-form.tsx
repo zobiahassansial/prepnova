@@ -266,7 +266,7 @@ export function SettingsForm() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Storage Manager</CardTitle>
-                        <CardDescription>{(storageUsage.used / (1024 * 1024)).toFixed(1)} MB used of 100 MB</CardDescription>
+                        <CardDescription>{((storageUsage?.used || 0) / (1024 * 1024)).toFixed(1)} MB used of 100 MB</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {/* Storage Bar */}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Clock, BookOpen, CheckCircle2, Loader2, Sparkles, Filter, Play } from "lucide-react"
+import { Plus, Clock, BookOpen, CheckCircle2, Loader2, Sparkles, Filter, Play, Trash2, MoreVertical } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StudyCalendar } from "@/components/study-planner/study-calendar"
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop"
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { generateStudyPlan, scheduleUserTasks } from "@/actions/ai-planner"
-import { createStudyTask, logStudyActivity, scheduleStudyTask, unscheduleStudyTask, checkScheduleConflict, checkDailyLimit } from "@/actions/study-planner"
+import { createStudyTask, logStudyActivity, scheduleStudyTask, unscheduleStudyTask, checkScheduleConflict, checkDailyLimit, deleteStudyTask, deleteAllScheduledTasks, deleteAllUnscheduledTasks } from "@/actions/study-planner"
 import { checkLimit, incrementUsage, getUserSubscription } from "@/lib/limits"
 import { db, auth } from "@/lib/firebase"
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, Timestamp, getDoc } from "firebase/firestore"
@@ -22,6 +23,7 @@ import { StudyTask, StudySchedule, Priority, Difficulty, TaskStatus } from "@/ty
 import { onAuthStateChanged } from "firebase/auth"
 
 export function StudyPlanner() {
+    const [createLoading, setCreateLoading] = useState(false)
     const [tasks, setTasks] = useState<StudyTask[]>([])
     const [schedule, setSchedule] = useState<StudySchedule[]>([])
     const [loading, setLoading] = useState(true)
@@ -33,6 +35,12 @@ export function StudyPlanner() {
     const [selectedTask, setSelectedTask] = useState<StudyTask | null>(null)
     const [draggedTask, setDraggedTask] = useState<StudyTask | null>(null)
     const [user, setUser] = useState<any>(null)
+    const formatTime = (time: string) => {
+        const [h, m] = time.split(":").map(Number)
+        const date = new Date()
+        date.setHours(h, m)
+        return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    }
 
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -154,27 +162,45 @@ export function StudyPlanner() {
     })
 
     const handleCreateTask = async () => {
-        if (!user) return
-        setLoading(true)
+        if (!user) {
+            toast.error("User not authenticated")
+            return
+        }
+
+        if (!newTaskData.title.trim() || !newTaskData.subject.trim()) {
+            toast.error("Title and subject are required")
+            return
+        }
+
+        setCreateLoading(true)
 
         try {
             await createStudyTask(user.uid, {
-                title: newTaskData.title,
-                subject: newTaskData.subject,
+                title: newTaskData.title.trim(),
+                subject: newTaskData.subject.trim(),
                 priority: newTaskData.priority,
                 difficulty: newTaskData.difficulty,
-                durationMinutes: parseInt(newTaskData.duration)
+                durationMinutes: Number(newTaskData.duration)
             })
 
-            toast.success("Task created!")
+            toast.success("Task created")
             setNewTaskOpen(false)
-            setNewTaskData({ title: "", subject: "", duration: "60", priority: "Medium", difficulty: "Medium" })
+            setNewTaskData({
+                title: "",
+                subject: "",
+                duration: "60",
+                priority: "Medium",
+                difficulty: "Medium"
+            })
         } catch (e: any) {
-            toast.error(e.message || "Failed to create task")
+            console.error(e)
+            toast.error(e?.message || "Failed to create task")
         } finally {
-            setLoading(false)
+            setCreateLoading(false)
         }
     }
+
+
 
 
     const handleSelectEvent = (event: any) => {
@@ -208,71 +234,116 @@ export function StudyPlanner() {
                 </div>
                 <div className="flex gap-2">
                     <Button
-                        variant="ghost"
+                        variant={showCalendar ? "secondary" : "ghost"}
                         size="icon"
                         onClick={() => setShowCalendar(!showCalendar)}
-                        className={showCalendar ? "bg-accent text-accent-foreground" : ""}
-                        title={showCalendar ? "Switch to List View" : "Switch to Calendar View"}
+                        title="Toggle Calendar View"
                     >
-                        {showCalendar ? <BookOpen className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
+                        {showCalendar ? <Filter className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
                     </Button>
-                    <Dialog open={newTaskOpen} onOpenChange={setNewTaskOpen}>
-                        <DialogTrigger asChild>
-                            <Button><Plus className="mr-2 h-4 w-4" /> Add Task</Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Add New Study Task</DialogTitle>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="grid gap-2">
-                                    <label>Task Title</label>
-                                    <Input value={newTaskData.title} onChange={e => setNewTaskData({ ...newTaskData, title: e.target.value })} placeholder="e.g. Read Chapter 4" />
-                                </div>
-                                <div className="grid gap-2">
-                                    <label>Subject</label>
-                                    <Input value={newTaskData.subject} onChange={e => setNewTaskData({ ...newTaskData, subject: e.target.value })} placeholder="e.g. Biology" />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <label>Duration (min)</label>
-                                        <Input type="number" value={newTaskData.duration} onChange={e => setNewTaskData({ ...newTaskData, duration: e.target.value })} />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <label>Priority</label>
-                                        <select
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                                            value={newTaskData.priority}
-                                            onChange={e => setNewTaskData({ ...newTaskData, priority: e.target.value as any })}
-                                        >
-                                            <option>High</option>
-                                            <option>Medium</option>
-                                            <option>Low</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <Button onClick={handleCreateTask} disabled={loading}>{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create Task</Button>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
+                    <Button
+                        onClick={() => setAiOpen(true)}
+                        className="hidden md:flex"
+                    >
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        AI Generate
+                    </Button>
 
-                    <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="outline"><Sparkles className="mr-2 h-4 w-4" /> AI Generate</Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>AI Study Planner (Scheduler)</DialogTitle>
-                                <DialogDescription>
-                                    Auto-schedule your existing tasks using AI.
-                                </DialogDescription>
-                            </DialogHeader>
-                            {/* Pass ALL tasks to the AI so it can reschedule everything */}
-                            <AIPlanGenerator user={user} onClose={() => setAiOpen(false)} existingTasks={tasks} />
-                        </DialogContent>
-                    </Dialog>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Manage Tasks</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setNewTaskOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> Add Task
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600"
+                                onClick={async () => {
+                                    if (confirm("Delete ALL scheduled tasks permanently? This cannot be undone.")) {
+                                        if (!user) return
+                                        await deleteAllScheduledTasks(user.uid)
+                                        toast.success("Scheduled tasks deleted")
+                                    }
+                                }}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete All Scheduled Tasks
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600"
+                                onClick={async () => {
+                                    if (confirm("Delete ALL unscheduled tasks permanently? This cannot be undone.")) {
+                                        if (!user) return
+                                        await deleteAllUnscheduledTasks(user.uid)
+                                        toast.success("Unscheduled tasks deleted")
+                                    }
+                                }}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete All Unscheduled Tasks
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
+            <Dialog open={newTaskOpen} onOpenChange={setNewTaskOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add New Study Task</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <label>Task Title</label>
+                            <Input value={newTaskData.title} onChange={e => setNewTaskData({ ...newTaskData, title: e.target.value })} placeholder="e.g. Read Chapter 4" />
+                        </div>
+                        <div className="grid gap-2">
+                            <label>Subject</label>
+                            <Input value={newTaskData.subject} onChange={e => setNewTaskData({ ...newTaskData, subject: e.target.value })} placeholder="e.g. Biology" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <label>Duration (min)</label>
+                                <Input type="number" value={newTaskData.duration} onChange={e => setNewTaskData({ ...newTaskData, duration: e.target.value })} />
+                            </div>
+                            <div className="grid gap-2">
+                                <label>Priority</label>
+                                <select
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                                    value={newTaskData.priority}
+                                    onChange={e => setNewTaskData({ ...newTaskData, priority: e.target.value as any })}
+                                >
+                                    <option>High</option>
+                                    <option>Medium</option>
+                                    <option>Low</option>
+                                </select>
+                            </div>
+                        </div>
+                        <Button onClick={handleCreateTask} disabled={createLoading}>{createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create Task</Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>AI Study Planner (Scheduler)</DialogTitle>
+                        <DialogDescription>
+                            Auto-schedule your existing tasks using AI.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <AIPlanGenerator
+                        user={user}
+                        onClose={() => setAiOpen(false)}
+                        existingTasks={tasks}
+                    />
+                </DialogContent>
+            </Dialog>
+
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full overflow-hidden">
                 <div className="lg:col-span-3 h-full overflow-y-auto">
@@ -347,6 +418,25 @@ export function StudyPlanner() {
                                 {schedule.length > 0 ? (
                                     schedule
                                         .sort((a, b) => {
+                                            const taskA = tasks.find(t => t.id === a.taskId)
+                                            const taskB = tasks.find(t => t.id === b.taskId)
+
+                                            // 1. Completion Sort (Active First, Completed Last)
+                                            const aDone = taskA?.status === "completed" ? 1 : 0
+                                            const bDone = taskB?.status === "completed" ? 1 : 0
+                                            if (aDone !== bDone) return aDone - bDone
+
+                                            // 2. Priority Sort (High > Medium > Low) - ONLY for Active
+                                            if (!aDone) {
+                                                const priorityOrder = { "High": 3, "Medium": 2, "Low": 1 }
+                                                // @ts-ignore
+                                                const pA = priorityOrder[taskA?.priority || "Low"] || 1
+                                                // @ts-ignore
+                                                const pB = priorityOrder[taskB?.priority || "Low"] || 1
+                                                if (pA !== pB) return pB - pA
+                                            }
+
+                                            // 3. Date/Time Sort
                                             const da = a.scheduledDate.toDate ? a.scheduledDate.toDate() : new Date(a.scheduledDate as any)
                                             const db = b.scheduledDate.toDate ? b.scheduledDate.toDate() : new Date(b.scheduledDate as any)
                                             if (da.getTime() !== db.getTime()) return da.getTime() - db.getTime()
@@ -355,12 +445,21 @@ export function StudyPlanner() {
                                         .map(s => {
                                             const task = tasks.find(t => t.id === s.taskId)
                                             if (!task) return null
+                                            const isCompleted = task.status === "completed"
+
                                             return (
                                                 <div
                                                     key={s.id}
-                                                    className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors group cursor-grab active:cursor-grabbing"
-                                                    draggable
+                                                    className={`flex items-center justify-between p-4 border rounded-lg transition-colors group ${isCompleted
+                                                        ? "bg-green-60/50 border-green-100 opacity-50"
+                                                        : "bg-card hover:bg-accent/50 cursor-grab active:cursor-grabbing"
+                                                        }`}
+                                                    draggable={!isCompleted}
                                                     onDragStart={(e) => {
+                                                        if (isCompleted) {
+                                                            e.preventDefault()
+                                                            return
+                                                        }
                                                         // Dragging FROM Scheduled List
                                                         // We pass the task AND scheduleId
                                                         const dragData = { ...task, scheduleId: s.id }
@@ -368,11 +467,17 @@ export function StudyPlanner() {
                                                     }}
                                                 >
                                                     <div className="flex items-center gap-4">
-                                                        <div className={`w-1 h-12 rounded-full ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-orange-500' : 'bg-yellow-500'}`} />
+                                                        <div className={`w-1 h-12 rounded-full ${isCompleted ? "bg-green-500" :
+                                                            task.priority === 'High' ? 'bg-red-500' :
+                                                                task.priority === 'Medium' ? 'bg-orange-500' : 'bg-yellow-500'
+                                                            }`} />
                                                         <div>
-                                                            <div className="font-medium text-base">{task.title}</div>
+                                                            <div className={`font-medium text-base ${isCompleted ? "line-through text-muted-foreground" : ""}`}>{task.title}</div>
                                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">{s.scheduledTime}</span>
+                                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">
+                                                                    {formatTime(s.scheduledTime)}
+                                                                </span>
+
                                                                 <span>{new Date(s.scheduledDate.toDate ? s.scheduledDate.toDate() : s.scheduledDate as any).toLocaleDateString()}</span>
                                                                 <span>•</span>
                                                                 <span>{task.durationMinutes}m</span>
@@ -382,29 +487,67 @@ export function StudyPlanner() {
                                                         </div>
                                                     </div>
                                                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        {!isCompleted && (
+                                                            <>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="h-8 w-8 p-0"
+                                                                    onClick={() => window.location.href = `/study/mode/${task.id}`}
+                                                                    title="Start Session"
+                                                                >
+                                                                    <Play className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                                                    onClick={async () => {
+                                                                        if (!user) return
+                                                                        await unscheduleStudyTask(user.uid, s.id, task.id)
+                                                                        toast.success("Task unscheduled")
+                                                                    }}
+                                                                    title="Unschedule Task"
+                                                                >
+                                                                    <Filter className="h-4 w-4 rotate-180" /> {/* Or Minus/X icon */}
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="h-8 bg-green-600 hover:bg-green-700 text-white"
+                                                                    onClick={() => {
+                                                                        const doComplete = async () => {
+                                                                            if (!user) return
+                                                                            await updateDoc(doc(db, "study_tasks", task.id), { status: "completed" })
+                                                                            await logStudyActivity(user.uid, task.id, "completed", "Task completed via list")
+                                                                            toast.success("Task completed!")
+                                                                        }
+                                                                        doComplete()
+                                                                    }}
+                                                                    title="Complete Task"
+                                                                >
+                                                                    <CheckCircle2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                        {isCompleted && (
+                                                            <Button size="sm" variant="ghost" disabled>
+                                                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                                            </Button>
+                                                        )}
                                                         <Button
-                                                            variant="ghost"
                                                             size="sm"
-                                                            onClick={() => {
-                                                                setSelectedTask({ ...task, scheduleId: s.id } as any)
-                                                                setDetailOpen(true)
+                                                            variant="destructive"
+                                                            className="h-8 px-2"
+                                                            onClick={async () => {
+                                                                if (!user) return
+                                                                if (confirm("Delete this task?")) {
+                                                                    await deleteStudyTask(user.uid, task.id)
+                                                                    toast.success("Task removed")
+                                                                }
                                                             }}
+                                                            title="Delete Task"
                                                         >
-                                                            Details
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            className="h-8 bg-green-600 hover:bg-green-700 text-white"
-                                                            onClick={() => {
-                                                                setSelectedTask({ ...task, scheduleId: s.id } as any)
-                                                                // We should ideally open the dialog or have a direct complete, but let's just open details to be safe for now or direct call check.
-                                                                // Since I can't easily pass the task to handleCompleteTask without state, setting state then calling it is tricky in React (state is async).
-                                                                // Better to set state and open dialog or use a direct handler wrapper if I wrote one.
-                                                                // Let's just open Details for now which has Complete.
-                                                                setDetailOpen(true)
-                                                            }}
-                                                        >
-                                                            <CheckCircle2 className="h-4 w-4" />
+                                                            <Trash2 className="h-4 w-4" />
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -413,7 +556,7 @@ export function StudyPlanner() {
                                 ) : (
                                     <div className="text-center p-12 border-2 border-dashed rounded-lg text-muted-foreground">
                                         <p>No scheduled tasks.</p>
-                                        <p className="text-sm mt-1">Drag tasks from the right sidebar to schedule them.</p>
+                                        <p className="text-sm mt-1">Drag tasks from the right sidebar to schedule them, or add new ones from Manage Tasks.</p>
                                     </div>
                                 )}
                             </div>
@@ -506,17 +649,34 @@ export function StudyPlanner() {
                         >
                             {tasks.filter(t => t.status === "unscheduled").length > 0 ? (
                                 tasks.filter(t => t.status === "unscheduled").map(task => (
-                                    <div key={task.id} className="p-2 border rounded-md bg-card text-sm cursor-grab active:cursor-grabbing hover:bg-accent/50" draggable onDragStart={(e) => {
+                                    <div key={task.id} className="p-2 border rounded-md bg-card text-sm cursor-grab active:cursor-grabbing hover:bg-accent/50 relative group" draggable onDragStart={(e) => {
                                         setDraggedTask(task)
                                         e.dataTransfer.setData("application/json", JSON.stringify(task))
                                     }}>
-                                        <div className="font-medium truncate">{task.title}</div>
+                                        <div className="font-medium truncate pr-6">{task.title}</div>
                                         <div className="flex justify-between text-xs text-muted-foreground mt-1">
                                             <span>{task.durationMinutes}m</span>
-                                            <span className={`px-1 rounded ${task.priority === 'High' ? 'bg-red-100 text-red-700' :
-                                                task.priority === 'Medium' ? 'bg-orange-100 text-orange-700' :
-                                                    'bg-yellow-100 text-yellow-700'
+                                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${task.priority === 'High' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+                                                task.priority === 'Medium' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                                    'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
                                                 }`}>{task.priority}</span>
+                                        </div>
+                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                                                onClick={async (e) => {
+                                                    e.stopPropagation()
+                                                    if (!user) return
+                                                    if (confirm("Delete this task?")) {
+                                                        await deleteStudyTask(user.uid, task.id)
+                                                        toast.success("Task deleted")
+                                                    }
+                                                }}
+                                            >
+                                                <Trash2 className="h-3 w-3" />
+                                            </Button>
                                         </div>
                                     </div>
                                 ))
@@ -530,7 +690,7 @@ export function StudyPlanner() {
                     </Card>
                 </div>
             </div>
-        </div>
+        </div >
     )
 }
 
@@ -560,7 +720,11 @@ function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose:
             // Case B: Tasks exist -> Schedule them
             // We use the new scheduleUserTasks action
             const tasksForAI = existingTasks.map(t => ({
-                ...t,
+                id: t.id,
+                title: t.title,
+                subject: t.subject,
+                priority: t.priority,
+                durationMinutes: t.durationMinutes,
                 deadline: t.deadline ? (typeof t.deadline.toDate === 'function' ? t.deadline.toDate().toISOString() : new Date(t.deadline as any).toISOString()) : undefined
             }))
 
