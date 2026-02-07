@@ -14,7 +14,7 @@ import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop"
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { generateStudyPlan, scheduleUserTasks } from "@/actions/ai-planner"
-import { createStudyTask, logStudyActivity, scheduleStudyTask, unscheduleStudyTask, checkScheduleConflict, checkDailyLimit, deleteStudyTask, deleteAllScheduledTasks, deleteAllUnscheduledTasks } from "@/actions/study-planner"
+import { createStudyTask, logStudyActivity, scheduleStudyTask, unscheduleStudyTask, checkScheduleConflict, checkDailyLimit, deleteStudyTask, deleteAllScheduledTasks, deleteAllUnscheduledTasks, updateTaskOrder } from "@/actions/study-planner"
 import { checkLimit, incrementUsage, getUserSubscription } from "@/lib/limits"
 import { db, auth } from "@/lib/firebase"
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, Timestamp, getDoc } from "firebase/firestore"
@@ -41,6 +41,26 @@ export function StudyPlanner() {
         date.setHours(h, m)
         return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     }
+    // ... existing state definitions ...
+
+    // ADD THIS FUNCTION
+    const formatTimeRange = (time: string, durationMinutes: number) => {
+        const [h, m] = time.split(":").map(Number)
+
+        // Calculate Start
+        const start = new Date()
+        start.setHours(h, m, 0, 0)
+
+        // Calculate End
+        const end = new Date(start.getTime() + durationMinutes * 60000)
+
+        // Format both
+        const format = (d: Date) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+
+        return `${format(start)} - ${format(end)}`
+    }
+
+    // ... useEffect ...
 
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -158,7 +178,10 @@ export function StudyPlanner() {
         subject: "",
         duration: "60",
         priority: "Medium" as Priority,
-        difficulty: "Medium" as Difficulty
+        difficulty: "Medium" as Difficulty,
+        // Optional scheduling fields
+        scheduledDate: undefined as Date | undefined,
+        scheduledTime: undefined as string | undefined
     })
 
     const handleCreateTask = async () => {
@@ -175,7 +198,7 @@ export function StudyPlanner() {
         setCreateLoading(true)
 
         try {
-            await createStudyTask(user.uid, {
+            const taskId = await createStudyTask(user.uid, {
                 title: newTaskData.title.trim(),
                 subject: newTaskData.subject.trim(),
                 priority: newTaskData.priority,
@@ -183,14 +206,23 @@ export function StudyPlanner() {
                 durationMinutes: Number(newTaskData.duration)
             })
 
-            toast.success("Task created")
+            // If scheduledDate/Time are present (from drag-and-drop creation), schedule it immediately
+            if (newTaskData.scheduledDate && newTaskData.scheduledTime) {
+                await scheduleStudyTask(user.uid, taskId, newTaskData.scheduledDate, newTaskData.scheduledTime)
+                toast.success("Task created and scheduled")
+            } else {
+                toast.success("Task created")
+            }
+
             setNewTaskOpen(false)
             setNewTaskData({
                 title: "",
                 subject: "",
                 duration: "60",
                 priority: "Medium",
-                difficulty: "Medium"
+                difficulty: "Medium",
+                scheduledDate: undefined,
+                scheduledTime: undefined
             })
         } catch (e: any) {
             console.error(e)
@@ -200,8 +232,18 @@ export function StudyPlanner() {
         }
     }
 
+    const handleSelectSlot = (slotInfo: any) => {
+        // slotInfo.start is the Date object where the user clicked/dragged
+        const start = slotInfo.start as Date
+        const time = `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')}`
 
-
+        setNewTaskData(prev => ({
+            ...prev,
+            scheduledDate: start,
+            scheduledTime: time
+        }))
+        setNewTaskOpen(true)
+    }
 
     const handleSelectEvent = (event: any) => {
         // Event resource is the task object
@@ -224,7 +266,8 @@ export function StudyPlanner() {
             toast.error("Failed to complete task")
         }
     }
-
+    console.log("SCHEDULE STATE:", schedule)
+    console.log("TASKS STATE:", tasks)
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
             <div className="flex items-center justify-between">
@@ -307,6 +350,24 @@ export function StudyPlanner() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
+                                <label>Date (Optional)</label>
+                                <Input
+                                    type="date"
+                                    value={newTaskData.scheduledDate ? newTaskData.scheduledDate.toISOString().split('T')[0] : ''}
+                                    onChange={e => setNewTaskData({ ...newTaskData, scheduledDate: e.target.value ? new Date(e.target.value) : undefined })}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <label>Time (Optional)</label>
+                                <Input
+                                    type="time"
+                                    value={newTaskData.scheduledTime || ''}
+                                    onChange={e => setNewTaskData({ ...newTaskData, scheduledTime: e.target.value || undefined })}
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
                                 <label>Duration (min)</label>
                                 <Input type="number" value={newTaskData.duration} onChange={e => setNewTaskData({ ...newTaskData, duration: e.target.value })} />
                             </div>
@@ -339,8 +400,9 @@ export function StudyPlanner() {
                     <AIPlanGenerator
                         user={user}
                         onClose={() => setAiOpen(false)}
-                        existingTasks={tasks}
+                        existingTasks={tasks.filter(t => t.status === "unscheduled")}
                     />
+
                 </DialogContent>
             </Dialog>
 
@@ -349,7 +411,7 @@ export function StudyPlanner() {
                 <div className="lg:col-span-3 h-full overflow-y-auto">
                     {/* Main Content Area: Calendar OR List */}
                     {showCalendar ? (
-                        tasks.length > 0 ? (
+                        schedule.length > 0 ? (
                             <StudyCalendar
                                 events={schedule.map(s => {
                                     const task = tasks.find(t => t.id === s.taskId)
@@ -370,6 +432,7 @@ export function StudyPlanner() {
                                 // @ts-ignore
                                 onEventDrop={handleEventDrop}
                                 onSelectEvent={handleSelectEvent}
+                                onSelectSlot={handleSelectSlot}
                                 resizable
                             />
                         ) : (
@@ -385,64 +448,37 @@ export function StudyPlanner() {
                             </div>
                         )
                     ) : (
-                        // SCHEDULED TASKS LIST VIEW
+                        // SCHEDULED TASKS LIST VIEW (MANUAL SORT)
                         <div className="space-y-4">
                             <h2 className="text-lg font-semibold tracking-tight">Scheduled Tasks</h2>
                             <div
                                 className="space-y-2 min-h-[200px]"
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={async (e) => {
+                                    e.preventDefault()
                                     try {
                                         const data = e.dataTransfer.getData("application/json")
-                                        if (data) {
-                                            const item = JSON.parse(data)
-                                            // 1. Sidebar (Unscheduled) -> List (Schedule it)
-                                            if (!item.scheduleId) {
-                                                if (!user) return
-                                                // Default: Schedule for Today at next hour (e.g., Now + 1h, rounded)
-                                                const now = new Date()
-                                                now.setHours(now.getHours() + 1, 0, 0, 0)
-                                                // Check bounds? Limit? Conflict?
-                                                // We'll just try to schedule.
-                                                const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+                                        if (!data) return
+                                        const item = JSON.parse(data) // The task being dragged
 
-                                                await scheduleStudyTask(user.uid, item.id, now, time)
-                                                toast.success(`Scheduled ${item.title} for ${time}`)
-                                            }
-                                        }
-                                    } catch (err) {
-                                        // ignore
-                                    }
+                                        // 1. Determine Drop Index & Surrounding Tasks
+                                        // We need to know WHERE in the list it was dropped.
+                                        // This is tricky with standard HTML5 DnD without individual drop targets.
+                                        // Simple approach: Use e.target to find closest row?
+                                        // Better approach: Since we can't easily get precise index in a container drop,
+                                        // we let the user drop ONTO a task to insert before/after.
+                                        // BUT for container drop (append), we handle here.
+
+                                        // FALLBACK: If dropped on container (not specific item), append to end.
+                                        // We will add specific drop handlers to items below.
+
+                                    } catch (err) { }
                                 }}
                             >
                                 {schedule.length > 0 ? (
                                     schedule
-                                        .sort((a, b) => {
-                                            const taskA = tasks.find(t => t.id === a.taskId)
-                                            const taskB = tasks.find(t => t.id === b.taskId)
-
-                                            // 1. Completion Sort (Active First, Completed Last)
-                                            const aDone = taskA?.status === "completed" ? 1 : 0
-                                            const bDone = taskB?.status === "completed" ? 1 : 0
-                                            if (aDone !== bDone) return aDone - bDone
-
-                                            // 2. Priority Sort (High > Medium > Low) - ONLY for Active
-                                            if (!aDone) {
-                                                const priorityOrder = { "High": 3, "Medium": 2, "Low": 1 }
-                                                // @ts-ignore
-                                                const pA = priorityOrder[taskA?.priority || "Low"] || 1
-                                                // @ts-ignore
-                                                const pB = priorityOrder[taskB?.priority || "Low"] || 1
-                                                if (pA !== pB) return pB - pA
-                                            }
-
-                                            // 3. Date/Time Sort
-                                            const da = a.scheduledDate.toDate ? a.scheduledDate.toDate() : new Date(a.scheduledDate as any)
-                                            const db = b.scheduledDate.toDate ? b.scheduledDate.toDate() : new Date(b.scheduledDate as any)
-                                            if (da.getTime() !== db.getTime()) return da.getTime() - db.getTime()
-                                            return a.scheduledTime.localeCompare(b.scheduledTime)
-                                        })
-                                        .map(s => {
+                                        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
+                                        .map((s, index, array) => {
                                             const task = tasks.find(t => t.id === s.taskId)
                                             if (!task) return null
                                             const isCompleted = task.status === "completed"
@@ -450,21 +486,85 @@ export function StudyPlanner() {
                                             return (
                                                 <div
                                                     key={s.id}
-                                                    className={`flex items-center justify-between p-4 border rounded-lg transition-colors group ${isCompleted
-                                                        ? "bg-green-60/50 border-green-100 opacity-50"
-                                                        : "bg-card hover:bg-accent/50 cursor-grab active:cursor-grabbing"
-                                                        }`}
                                                     draggable={!isCompleted}
                                                     onDragStart={(e) => {
                                                         if (isCompleted) {
                                                             e.preventDefault()
                                                             return
                                                         }
-                                                        // Dragging FROM Scheduled List
-                                                        // We pass the task AND scheduleId
-                                                        const dragData = { ...task, scheduleId: s.id }
+                                                        const dragData = { ...task, scheduleId: s.id, type: 'scheduled', originalIndex: index }
                                                         e.dataTransfer.setData("application/json", JSON.stringify(dragData))
                                                     }}
+                                                    onDragOver={(e) => e.preventDefault()}
+                                                    onDrop={async (e) => {
+                                                        e.preventDefault()
+                                                        e.stopPropagation()
+                                                        const data = e.dataTransfer.getData("application/json")
+                                                        if (!data) return
+                                                        const draggedItem = JSON.parse(data)
+
+                                                        if (draggedItem.id === task.id) return // Dropped on self
+
+                                                        // Logic: Insert BEFORE this item
+                                                        // New Order Index = (Prev.Order + This.Order) / 2
+                                                        // What is Prev? array[index - 1]
+
+                                                        const prevItem = index > 0 ? array[index - 1] : null
+                                                        const nextItem = s // We are dropping ON 's', so 's' becomes next
+
+                                                        // Calculate Order Index
+                                                        const prevOrder = prevItem?.orderIndex || 0
+                                                        const nextOrder = nextItem.orderIndex || Date.now()
+                                                        const newOrderIndex = index === 0 ? nextOrder - 1000 : (prevOrder + nextOrder) / 2
+
+                                                        // Calculate Time
+                                                        // Rule: "Compute time ONLY from surrounding tasks"
+                                                        // If we have a prevItem, use its end time.
+                                                        // If not, use nextItem's start time - duration? Or just default.
+
+                                                        let newTime = "09:00"
+                                                        let newDate = new Date()
+
+                                                        if (prevItem) {
+                                                            const pTask = tasks.find(t => t.id === prevItem.taskId)
+                                                            const pDate = prevItem.scheduledDate.toDate ? prevItem.scheduledDate.toDate() : new Date(prevItem.scheduledDate as any)
+                                                            const [ph, pm] = prevItem.scheduledTime.split(":").map(Number)
+                                                            pDate.setHours(ph, pm + (pTask?.durationMinutes || 60), 0, 0) // End Time
+
+                                                            newTime = `${pDate.getHours().toString().padStart(2, '0')}:${pDate.getMinutes().toString().padStart(2, '0')}`
+                                                            newDate = pDate
+                                                        } else {
+                                                            // No prev item, trying to be first.
+                                                            // Take next item's time minus duration? Or just keep same day?
+                                                            const nDate = nextItem.scheduledDate.toDate ? nextItem.scheduledDate.toDate() : new Date(nextItem.scheduledDate as any)
+                                                            newDate = nDate
+                                                            // Keep 9:00 or current? Let's use 09:00 as start of day anchor if first.
+                                                            // Or if draggedItem has a time, use it?
+                                                            // Requirement: "Update scheduledDate + scheduledTime from drop position"
+                                                            // If becoming first, maybe 15 mins before next?
+                                                            const [nh, nm] = nextItem.scheduledTime.split(":").map(Number)
+                                                            const nextStart = new Date(nDate)
+                                                            nextStart.setHours(nh, nm, 0, 0)
+                                                            nextStart.setMinutes(nextStart.getMinutes() - (draggedItem.durationMinutes || 60))
+                                                            newTime = `${nextStart.getHours().toString().padStart(2, '0')}:${nextStart.getMinutes().toString().padStart(2, '0')}`
+                                                        }
+
+                                                        if (!user) return
+
+                                                        if (draggedItem.scheduleId) {
+                                                            // Scheduled -> Scheduled (Reorder)
+                                                            await scheduleStudyTask(user.uid, draggedItem.id, newDate, newTime)
+                                                            toast.success("Task reordered")
+                                                        } else {
+                                                            // Unscheduled -> Scheduled (Schedule it)
+                                                            await scheduleStudyTask(user.uid, draggedItem.id, newDate, newTime)
+                                                            toast.success("Task scheduled")
+                                                        }
+                                                    }}
+                                                    className={`flex items-center justify-between p-4 border rounded-lg transition-colors group ${isCompleted
+                                                        ? "bg-green-60/50 border-green-100 opacity-50"
+                                                        : "bg-card hover:bg-accent/50 cursor-grab active:cursor-grabbing"
+                                                        }`}
                                                 >
                                                     <div className="flex items-center gap-4">
                                                         <div className={`w-1 h-12 rounded-full ${isCompleted ? "bg-green-500" :
@@ -474,8 +574,9 @@ export function StudyPlanner() {
                                                         <div>
                                                             <div className={`font-medium text-base ${isCompleted ? "line-through text-muted-foreground" : ""}`}>{task.title}</div>
                                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                                {/* UPDATED: Shows "9:00 AM - 10:00 AM" */}
                                                                 <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">
-                                                                    {formatTime(s.scheduledTime)}
+                                                                    {formatTimeRange(s.scheduledTime, task.durationMinutes || 60)}
                                                                 </span>
 
                                                                 <span>{new Date(s.scheduledDate.toDate ? s.scheduledDate.toDate() : s.scheduledDate as any).toLocaleDateString()}</span>
@@ -509,7 +610,7 @@ export function StudyPlanner() {
                                                                     }}
                                                                     title="Unschedule Task"
                                                                 >
-                                                                    <Filter className="h-4 w-4 rotate-180" /> {/* Or Minus/X icon */}
+                                                                    <Filter className="h-4 w-4 rotate-180" />
                                                                 </Button>
                                                                 <Button
                                                                     size="sm"
@@ -554,9 +655,29 @@ export function StudyPlanner() {
                                             )
                                         })
                                 ) : (
-                                    <div className="text-center p-12 border-2 border-dashed rounded-lg text-muted-foreground">
+                                    <div
+                                        className="text-center p-12 border-2 border-dashed rounded-lg text-muted-foreground"
+                                        onDrop={async (e) => {
+                                            // Handle dropping into empty list
+                                            e.preventDefault()
+                                            const data = e.dataTransfer.getData("application/json")
+                                            if (!data) return
+                                            const draggedItem = JSON.parse(data)
+                                            if (!user) return
+
+                                            // Default for first item
+                                            const now = new Date()
+                                            now.setHours(9, 0, 0, 0)
+                                            if (now < new Date()) now.setHours(new Date().getHours() + 1, 0, 0, 0)
+                                            const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+
+                                            await scheduleStudyTask(user.uid, draggedItem.id, now, time)
+                                            toast.success("Task scheduled")
+                                        }}
+                                        onDragOver={e => e.preventDefault()}
+                                    >
                                         <p>No scheduled tasks.</p>
-                                        <p className="text-sm mt-1">Drag tasks from the right sidebar to schedule them, or add new ones from Manage Tasks.</p>
+                                        <p className="text-sm mt-1">Drag tasks from the right sidebar to schedule them.</p>
                                     </div>
                                 )}
                             </div>
@@ -623,63 +744,93 @@ export function StudyPlanner() {
                             className="flex-1 overflow-y-auto space-y-2 p-2"
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={async (e) => {
-                                // Logic to unschedule if dropped here
-                                // We can get data from event probably, or use draggedTask state if available
-                                // The dragging logic sets 'draggedTask'.
-
-                                // But wait, 'draggedTask' is usually set when dragging FROM here. 
-                                // Only if we drag FROM calendar/list do we need to unset.
-                                // React-Big-Calendar drag doesn't easily expose the raw item via local 'draggedTask' state unless we hooked it.
-                                // However, we can try to rely on JSON parse?
+                                e.preventDefault()
                                 try {
                                     const data = e.dataTransfer.getData("application/json")
                                     if (data) {
                                         const item = JSON.parse(data)
-                                        // If it has a scheduleId, it's scheduled. Unschedule it.
                                         if (item.scheduleId) {
                                             if (!user) return
-                                            await unscheduleStudyTask(user.uid, item.scheduleId, item.id)
+                                            // Scheduled -> Unscheduled (Drop on container = Append)
+                                            await unscheduleStudyTask(user.uid, item.scheduleId, item.id, Date.now())
                                             toast.success("Task unscheduled")
                                         }
                                     }
-                                } catch (err) {
-                                    // Ignore JSON errors
-                                }
+                                } catch (err) { }
                             }}
                         >
                             {tasks.filter(t => t.status === "unscheduled").length > 0 ? (
-                                tasks.filter(t => t.status === "unscheduled").map(task => (
-                                    <div key={task.id} className="p-2 border rounded-md bg-card text-sm cursor-grab active:cursor-grabbing hover:bg-accent/50 relative group" draggable onDragStart={(e) => {
-                                        setDraggedTask(task)
-                                        e.dataTransfer.setData("application/json", JSON.stringify(task))
-                                    }}>
-                                        <div className="font-medium truncate pr-6">{task.title}</div>
-                                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                                            <span>{task.durationMinutes}m</span>
-                                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${task.priority === 'High' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
-                                                task.priority === 'Medium' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
-                                                    'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                                                }`}>{task.priority}</span>
+                                tasks
+                                    .filter(t => t.status === "unscheduled")
+                                    .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
+                                    .map((task, index, array) => (
+                                        <div
+                                            key={task.id}
+                                            className="p-2 border rounded-md bg-card text-sm cursor-grab active:cursor-grabbing hover:bg-accent/50 relative group"
+                                            draggable
+                                            onDragStart={(e) => {
+                                                setDraggedTask(task)
+                                                const dragData = { ...task, type: 'unscheduled', originalIndex: index }
+                                                e.dataTransfer.setData("application/json", JSON.stringify(dragData))
+                                            }}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onDrop={async (e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                const data = e.dataTransfer.getData("application/json")
+                                                if (!data) return
+                                                const draggedItem = JSON.parse(data)
+
+                                                if (draggedItem.id === task.id) return
+
+                                                // Insert BEFORE this item
+                                                const prevItem = index > 0 ? array[index - 1] : null
+                                                const nextItem = task
+
+                                                const prevOrder = prevItem?.orderIndex || 0
+                                                const nextOrder = nextItem.orderIndex || Date.now()
+                                                const newOrderIndex = index === 0 ? nextOrder - 1000 : (prevOrder + nextOrder) / 2
+
+                                                if (!user) return
+
+                                                if (draggedItem.scheduleId) {
+                                                    // Scheduled -> Unscheduled (Insert specific pos)
+                                                    await unscheduleStudyTask(user.uid, draggedItem.scheduleId, draggedItem.id, newOrderIndex)
+                                                    toast.success("Task unscheduled")
+                                                } else {
+                                                    // Unscheduled -> Unscheduled (Reorder)
+                                                    await updateTaskOrder(user.uid, draggedItem.id, "study_tasks", newOrderIndex)
+                                                    // Optimistic update?
+                                                }
+                                            }}
+                                        >
+                                            <div className="font-medium truncate pr-6">{task.title}</div>
+                                            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                                                <span>{task.durationMinutes}m</span>
+                                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${task.priority === 'High' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+                                                    task.priority === 'Medium' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                                        'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
+                                                    }`}>{task.priority}</span>
+                                            </div>
+                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation()
+                                                        if (!user) return
+                                                        if (confirm("Delete this task?")) {
+                                                            await deleteStudyTask(user.uid, task.id)
+                                                            toast.success("Task deleted")
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-3 w-3" />
+                                                </Button>
+                                            </div>
                                         </div>
-                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 text-muted-foreground hover:text-red-500"
-                                                onClick={async (e) => {
-                                                    e.stopPropagation()
-                                                    if (!user) return
-                                                    if (confirm("Delete this task?")) {
-                                                        await deleteStudyTask(user.uid, task.id)
-                                                        toast.success("Task deleted")
-                                                    }
-                                                }}
-                                            >
-                                                <Trash2 className="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))
+                                    ))
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4 gap-2 opacity-50">
                                     <Filter className="h-8 w-8" />
@@ -698,6 +849,8 @@ export function StudyPlanner() {
 
 function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose: () => void, existingTasks: StudyTask[] }) {
     const [hours, setHours] = useState(2)
+    const [preferences, setPreferences] = useState("")
+    const [days, setDays] = useState(1)
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
@@ -719,16 +872,19 @@ function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose:
 
             // Case B: Tasks exist -> Schedule them
             // We use the new scheduleUserTasks action
-            const tasksForAI = existingTasks.map(t => ({
-                id: t.id,
-                title: t.title,
-                subject: t.subject,
-                priority: t.priority,
-                durationMinutes: t.durationMinutes,
-                deadline: t.deadline ? (typeof t.deadline.toDate === 'function' ? t.deadline.toDate().toISOString() : new Date(t.deadline as any).toISOString()) : undefined
-            }))
+            const tasksForAI = existingTasks
+                .filter(t => t.status === "unscheduled")
+                .map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    subject: t.subject,
+                    priority: t.priority,
+                    durationMinutes: t.durationMinutes,
+                    deadline: t.deadline ? (typeof t.deadline.toDate === 'function' ? t.deadline.toDate().toISOString() : new Date(t.deadline as any).toISOString()) : undefined
+                }))
 
-            const result = await scheduleUserTasks(tasksForAI, hours)
+            // Pass preferences and days to the action
+            const result = await scheduleUserTasks(tasksForAI, hours, preferences, days)
 
             if (result.error) {
                 toast.error(result.error)
@@ -780,23 +936,50 @@ function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose:
                 <p className="text-xs text-muted-foreground">The AI will attempt to reschedule ALL your tasks into an optimal plan, respecting your daily limits.</p>
             </div>
 
-            <div className="space-y-2">
-                <Label>Daily Study Limit (Hours)</Label>
-                <div className="flex items-center gap-4">
-                    <input
-                        type="range"
-                        min="1"
-                        max="20" // Max 20h limit
-                        step="0.5"
-                        value={hours}
-                        onChange={(e) => setHours(parseFloat(e.target.value))}
-                        className="flex-1"
+            <div className="space-y-4">
+                <div className="grid gap-2">
+                    <Label>Schedule Duration</Label>
+                    <Select value={days.toString()} onValueChange={(v) => setDays(parseInt(v))}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select duration" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="1">Next Day Only</SelectItem>
+                            <SelectItem value="3">Next 3 Days</SelectItem>
+                            <SelectItem value="7">Next Week</SelectItem>
+                            <SelectItem value="30">Next Month</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="grid gap-2">
+                    <Label>Daily Study Limit (Hours)</Label>
+                    <div className="flex items-center gap-4">
+                        <input
+                            type="range"
+                            min="1"
+                            max="12"
+                            step="0.5"
+                            value={hours}
+                            onChange={(e) => setHours(parseFloat(e.target.value))}
+                            className="flex-1"
+                        />
+                        <span className="w-12 text-center font-mono">{hours}h</span>
+                    </div>
+                </div>
+
+                <div className="grid gap-2">
+                    <Label>Specific Requests (Optional)</Label>
+                    <textarea
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder='e.g. "Focus on Math", "No breaks on Tuesday", "Finish Biology first"'
+                        value={preferences}
+                        onChange={(e) => setPreferences(e.target.value)}
                     />
-                    <span className="w-12 text-center font-mono">{hours}h</span>
                 </div>
             </div>
 
-            <Button onClick={handleGenerate} disabled={loading} className="w-full">
+            <Button onClick={handleGenerate} disabled={loading} className="w-full mt-4">
                 {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Scheduling...</> : <><Sparkles className="mr-2 h-4 w-4" /> Schedule My Tasks</>}
             </Button>
         </div>

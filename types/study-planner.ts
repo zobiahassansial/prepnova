@@ -18,15 +18,17 @@ export interface StudyTask {
     deadline?: Timestamp | null
     createdAt: Timestamp
     updatedAt: Timestamp
+    orderIndex?: number
 }
 
 export interface StudySchedule {
     id: string
     userId: string
     taskId: string
-    scheduledDate: Timestamp // YYYY-MM-DD (at midnight or generic)
+    scheduledDate: any // Timestamp or Date
     scheduledTime: string // HH:MM
     durationMinutes: number
+    orderIndex?: number
 }
 
 export interface StudyActivityLog {

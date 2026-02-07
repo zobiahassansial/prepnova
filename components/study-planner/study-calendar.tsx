@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Calendar, momentLocalizer, Views } from "react-big-calendar"
 import moment from "moment"
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop"
@@ -29,14 +29,32 @@ export function StudyCalendar({
     resizable
 }: StudyCalendarProps) {
     const [view, setView] = useState(Views.WEEK)
+    const [date, setDate] = useState(new Date())
+
+    // Auto-navigate to the first event's date if available
+    useEffect(() => {
+        if (events && events.length > 0) {
+            // Sort events by start time to find the earliest one
+            const sortedEvents = [...events].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+            const firstEventDate = new Date(sortedEvents[0].start)
+            setDate(firstEventDate)
+        }
+    }, [events.length]) // Only run when event count changes to avoid jumping during drag/drop
 
     const eventStyleGetter = (event: any) => {
         const priority = event.resource?.priority
-        let backgroundColor = "#eab308"
+        const subject = event.resource?.subject || ""
+        let backgroundColor = "#eab308" // Default/Low (Yellow)
 
-        if (priority === "Medium") backgroundColor = "#f97316"
-        if (priority === "High") backgroundColor = "#ef4444"
-        if (event.resource?.status === "completed") backgroundColor = "#22c55e"
+        // Priority Logic
+        if (priority === "Medium") backgroundColor = "#f97316" // Orange
+        if (priority === "High") backgroundColor = "#ef4444" // Red
+
+        // Subject Logic (Fallback if no Priority, or specific subject overrides)
+        // (Optional: Simple hash for subject color if needed, but priority is cleaner)
+        if (subject === "Math") backgroundColor = "#3b82f6" // Blue for Math (Example)
+
+        if (event.resource?.status === "completed") backgroundColor = "#22c55e" // Green
 
         return {
             style: {
@@ -44,17 +62,16 @@ export function StudyCalendar({
                 borderRadius: "4px",
                 opacity: 1,
                 color: "#ffffff",
-                // Added a dark border so overlapping events are distinct
-                border: "1.5px solid #0f172a",
+                border: "1px solid rgba(0,0,0,0.1)",
                 padding: "2px 4px",
-                fontWeight: 600,
                 fontSize: "0.75rem",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                zIndex: 5,
-                // Ensures text doesn't overflow visually
+                fontWeight: 600,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                zIndex: 1,
                 overflow: "hidden",
                 whiteSpace: "nowrap",
-                textOverflow: "ellipsis"
+                textOverflow: "ellipsis",
+                display: "block"
             }
         }
     }
@@ -76,13 +93,18 @@ export function StudyCalendar({
                     endAccessor="end"
                     view={view}
                     onView={(v: any) => setView(v)}
+                    date={date}
+                    onNavigate={(d: any) => setDate(d)}
                     selectable
+                    draggableAccessor={() => true}
+
+                    timeslots={1}
                     onSelectEvent={onSelectEvent}
                     onSelectSlot={onSelectSlot}
                     onEventDrop={onEventDrop}
                     onDropFromOutside={onDropFromOutside}
                     dragFromOutsideItem={() => ({ style: { zIndex: 99 } })}
-                    resizable={resizable}
+                    resizable={true}
                     // Custom Toolbar to remove Back/Next/Today but keep visibility
                     components={{
                         toolbar: (props: any) => (
@@ -96,8 +118,8 @@ export function StudyCalendar({
                                             key={v}
                                             onClick={() => props.onView(v)}
                                             className={`px-3 py-1 rounded text-xs font-medium transition-all ${props.view === v
-                                                    ? "bg-[#3b82f6] text-white"
-                                                    : "text-gray-500 hover:text-gray-300"
+                                                ? "bg-[#3b82f6] text-white"
+                                                : "text-gray-500 hover:text-gray-300"
                                                 }`}
                                         >
                                             {v.charAt(0).toUpperCase() + v.slice(1)}

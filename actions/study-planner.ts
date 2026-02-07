@@ -1,7 +1,5 @@
 "use server"
 
-
-
 import { adminDb } from "@/lib/firebase-admin"
 import { StudyTask, StudyActivityLog, Priority, Difficulty } from "@/types/study-planner"
 import { FieldValue, Timestamp } from "firebase-admin/firestore"
@@ -11,9 +9,7 @@ const TASKS_COLLECTION = "study_tasks"
 const SCHEDULE_COLLECTION = "study_schedule"
 const LOG_COLLECTION = "study_activity_log"
 
-/**
- * Creates a new unscheduled study task.
- */
+//Creates a new unscheduled study task.
 export async function createStudyTask(userId: string, data: {
     title: string
     subject: string
@@ -26,7 +22,7 @@ export async function createStudyTask(userId: string, data: {
         throw new Error("Task duration cannot exceed 90 minutes (Atomic Rule)")
     }
 
-    const task: Omit<StudyTask, "id"> = {
+    const task: Omit<StudyTask, "id"> & { orderIndex: number } = {
         userId,
         title: data.title,
         subject: data.subject,
@@ -37,7 +33,8 @@ export async function createStudyTask(userId: string, data: {
         status: "unscheduled", // Always starts unscheduled
         deadline: null,
         createdAt: Timestamp.now() as any,
-        updatedAt: Timestamp.now() as any
+        updatedAt: Timestamp.now() as any,
+        orderIndex: Date.now() // Simple default ordering
     }
 
     const docRef = await adminDb.collection(TASKS_COLLECTION).add(task)
@@ -49,7 +46,7 @@ export async function createStudyTask(userId: string, data: {
  * Schedules a task (Drag & Drop or AI).
  * Updates task status and creates/updates schedule entry.
  */
-export async function scheduleStudyTask(userId: string, taskId: string, date: Date, time: string) {
+export async function scheduleStudyTask(userId: string, taskId: string, date: Date, time: string, orderIndex?: number) {
 
     // ✅ REMOVE OLD SCHEDULE FIRST
     const existingQuery = adminDb.collection(SCHEDULE_COLLECTION)
@@ -81,16 +78,14 @@ export async function scheduleStudyTask(userId: string, taskId: string, date: Da
         taskId,
         scheduledDate: Timestamp.fromDate(date) as any,
         scheduledTime: time,
-        durationMinutes: duration
+        durationMinutes: duration,
+        orderIndex: orderIndex !== undefined ? orderIndex : Date.now()
     })
 
     await batch.commit()
 }
+//Logs activity strictly for the planner module.
 
-
-/**
- * Logs activity strictly for the planner module.
- */
 export async function logStudyActivity(
     userId: string,
     taskId: string,
@@ -110,7 +105,7 @@ export async function logStudyActivity(
 /**
  * Unschedules a task (removes from schedule, sets status to unscheduled).
  */
-export async function unscheduleStudyTask(userId: string, scheduleId: string, taskId: string) {
+export async function unscheduleStudyTask(userId: string, scheduleId: string, taskId: string, orderIndex?: number) {
     if (!scheduleId) return;
 
     const batch = adminDb.batch()
@@ -121,13 +116,27 @@ export async function unscheduleStudyTask(userId: string, scheduleId: string, ta
 
     // 2. Update Task Status
     const taskRef = adminDb.collection(TASKS_COLLECTION).doc(taskId)
-    batch.update(taskRef, {
+    const updateData: any = {
         status: "unscheduled",
         updatedAt: Timestamp.now()
-    })
+    }
+    if (orderIndex !== undefined) {
+        updateData.orderIndex = orderIndex
+    }
+
+    batch.update(taskRef, updateData)
 
     await batch.commit()
     await logStudyActivity(userId, taskId, "rescheduled", "Moved to unscheduled")
+}
+
+/**
+ * Updates the orderIndex of a task or schedule (without changing other fields).
+ */
+export async function updateTaskOrder(userId: string, id: string, collection: "study_tasks" | "study_schedule", orderIndex: number) {
+    await adminDb.collection(collection).doc(id).update({
+        orderIndex
+    })
 }
 
 /**

@@ -40,7 +40,6 @@ RULES:
 - Do NOT leave large idle gaps (>45 minutes) unless moving to next day
 - NEVER include "(Dev Mode)" or any environment/debug text in task titles
 
-
 Output format:
 [
   {
@@ -54,7 +53,6 @@ Output format:
   }
 ]
 `
-
     const result = await model.generateContent(prompt)
     const text = result.response.text()
 
@@ -89,7 +87,9 @@ export async function scheduleUserTasks(
     durationMinutes: number
     deadline?: string
   }[],
-  hoursPerDay: number
+  hoursPerDay: number,
+  preferences?: string,
+  daysToSchedule: number = 1
 ) {
   const apiKey = process.env.GEMINI_API_KEY
 
@@ -104,11 +104,29 @@ export async function scheduleUserTasks(
   try {
     const model = getGeminiModel()
 
+    // Calculate Date Range
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const startDateStr = tomorrow.toISOString().split('T')[0] // Format: YYYY-MM-DD
+
+    // Calculate End Date
+    const endDate = new Date(tomorrow)
+    endDate.setDate(endDate.getDate() + (daysToSchedule - 1)) // If 1 day, end = start
+    const endDateStr = endDate.toISOString().split('T')[0]
+
     const prompt = `
 You are a strict Study Planner AI Scheduler.
 
 Your goal is to intelligently schedule the user's existing study tasks
 while PREVENTING burnout and overloading.
+
+CURRENT CONTEXT:
+- Start Scheduling From: ${startDateStr} (YYYY-MM-DD)
+- End Scheduling Date: ${endDateStr} (YYYY-MM-DD)
+- Duration: ${daysToSchedule} day(s)
+- Daily Limit: ${hoursPerDay} hours
+- USER PREFERENCES: "${preferences || "None"}"
 
 CORE RULES (MANDATORY):
 - Do NOT create new tasks.
@@ -118,20 +136,20 @@ CORE RULES (MANDATORY):
   1) High priority tasks FIRST
   2) Medium priority tasks NEXT
   3) Low priority tasks LAST
-- Maximum daily study limit = 20 hours.
 - Maximum task duration = 90 minutes.
 - NEVER schedule tasks back-to-back.
 - Insert mandatory breaks:
   - Minimum 10 minutes after every task
   - 30 minutes break after 3 continuous hours
-- No overlapping tasks.
-- Scheduling must start from TOMORROW.
-- If a task does not fit due to limits or conflicts, keep it UNSCHEDULED.
+- Distribute tasks evenly across the available days if possible, or prioritize earlier days for high priority.
+- If "USER PREFERENCES" conflict with rules, try to accommodate preferences within safety limits (e.g., "No breaks" is unsafe, ignore; "Focus on Math" -> prioritize Math).
 
-ANTI-BURNOUT LOGIC:
-- Distribute tasks across days evenly.
-- Avoid filling a single day aggressively if future days are available.
-- Prefer shorter sessions earlier in the day for high priority tasks.
+CRITICAL OVERLAP PREVENTION:
+- You MUST calculate time sequentially.
+- Start Time of Task B = End Time of Task A + Break.
+- NO TWO TASKS CAN HAVE THE SAME START TIME.
+- If Task A is 09:00 - 10:00, Task B MUST start at 10:10 or later.
+- CRITICAL: You must keep a running counter of time. If Task A is 9:00-10:00, Task B CANNOT start at 9:00. It MUST start at 10:10. Verify every single start time against previous end times.
 
 INPUT TASKS:
 ${JSON.stringify(tasks, null, 2)}
@@ -149,7 +167,7 @@ OUTPUT FORMAT (STRICT JSON ONLY):
   "unscheduled_tasks": [
     {
       "task_id": "exact_task_id",
-      "reason": "daily limit / conflict / spacing rule"
+      "reason": "daily limit / conflict / spacing rule / preferences"
     }
   ]
 }
