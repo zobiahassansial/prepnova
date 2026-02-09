@@ -1,44 +1,60 @@
 "use server"
 
-import { getGeminiModel } from "@/lib/gemini"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 
-export async function generateInterviewResponse(history: any[]) {
-  const apiKey = process.env.GEMINI_API_KEY
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+// ✅ Using the latest Flash Lite model for speed
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }) 
 
-  if (!apiKey) {
-    return { error: "GEMINI_API_KEY not configured" }
-  }
+export async function getLiveInterviewHelp(transcript: string) {
+    if (!transcript) return { error: "No text detected" }
 
-  try {
-    const model = getGeminiModel()
+    try {
+        const prompt = `
+            You are a helpful assistant assisting a candidate during a live interview.
+            The interviewer just said: "${transcript}"
+            
+            Provide a concise, professional, and impressive answer that the candidate can speak immediately.
+            - Keep it short (2-3 sentences max).
+            - Direct answer only. No intro/outro.
+        `
 
-    const systemPrompt = `
-You are a professional hiring manager conducting a behavioral interview.
-Be professional but encouraging. Ask one question at a time.
-After the user answers, acknowledge their answer briefly and ask a follow-up or a new question.
-Keep responses concise (max 2-3 sentences).
-`
+        const result = await model.generateContent(prompt)
+        const answer = result.response.text()
+        
+        return { success: true, answer }
+    } catch (error) {
+        return { error: "Failed to generate answer" }
+    }
+}
 
-    const conversation = history
-      .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-      .join("\n")
+// ... (Baaki Mock Interview code same rahega) ...
+export async function generateInterviewResponse(messages: { role: string, content: string }[]) {
+    try {
+        const history = messages.map(m => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }]
+        }))
 
-    const prompt = `
-${systemPrompt}
+        const systemInstruction = `
+            You are a professional HR interviewer. Ask ONE question at a time.
+        `
+        
+        const lastMessage = messages[messages.length - 1].content;
+        const historyWithoutLast = history.slice(0, -1);
 
-Conversation so far:
-${conversation}
+        const chatSession = model.startChat({
+            history: historyWithoutLast,
+            systemInstruction: { role: "system", parts: [{ text: systemInstruction }] } as any
+        });
 
-Respond with the next interviewer message only.
-`
+        const result = await chatSession.sendMessage(lastMessage);
+        const reply = result.response.text();
 
-    const result = await model.generateContent(prompt)
-    const content = result.response.text()
+        return { reply }
 
-    return { reply: content }
-
-  } catch (error: any) {
-    console.error("AI Interview Error:", error)
-    return { error: error.message || "Failed to generate response" }
-  }
+    } catch (error: any) {
+        console.error("Interview Error:", error)
+        return { error: "Failed to generate interview response." }
+    }
 }
