@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { UploadCloud, FileText, Brain, Loader2, Copy } from "lucide-react"
@@ -33,7 +33,6 @@ export function NoteSummarizer() {
             if (currentUser) {
                 setUser(currentUser)
                 const q = query(collection(db, "notes"), where("userId", "==", currentUser.uid))
-                // ... (rest of useEffect logic remains implied/unchanged if not touched, but replace block needs context)
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const fetched = snapshot.docs.map(doc => ({
                         id: doc.id,
@@ -42,9 +41,6 @@ export function NoteSummarizer() {
                     // Sort by createdAt desc
                     fetched.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds)
                     setSummaries(fetched)
-                    if (fetched.length > 0 && !selectedSummary) {
-                        setSelectedSummary(fetched[0])
-                    }
                 })
                 return () => unsubscribe()
             } else {
@@ -52,15 +48,16 @@ export function NoteSummarizer() {
             }
         })
         return () => unsubscribeAuth()
-    }, [selectedSummary])
+    }, [])
 
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            handleUpload(e.target.files[0])
+    // Optimization: Handle initial selection in a separate effect or useMemo
+    useEffect(() => {
+        if (summaries.length > 0 && !selectedSummary) {
+            setSelectedSummary(summaries[0])
         }
-    }
+    }, [summaries, selectedSummary])
 
-    const handleUpload = async (file: File) => {
+    const handleUpload = useCallback(async (file: File) => {
         if (!user) {
             toast.error("You must be logged in.")
             return
@@ -72,8 +69,6 @@ export function NoteSummarizer() {
             setShowUpgrade(true)
             return
         }
-
-        // Size validation (10MB)
 
         // Size validation (10MB)
         if (file.size > 10 * 1024 * 1024) {
@@ -102,19 +97,17 @@ export function NoteSummarizer() {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref)
 
                 // Call Server Action to Process & Summarize
-                // Dynamic import to avoid server code in client bundle if needed, usually Next.js handles this map.
-                // But better to import at top. I will add import. 
                 const { processAndSummarizeNote } = await import("@/actions/notes")
 
                 const result = await processAndSummarizeNote(downloadURL, file.type)
 
-                if (result.error) {
-                    toast.error(result.error)
+                if (!result.success || result.error) {
+                    toast.error(result.error || "Failed to process note")
                     setIsUploading(false)
                     return
                 }
 
-                const aiSummary = result.summary || "No summary generated."
+                const aiSummary = result.extractedText || "No summary generated."
 
                 // Save to Firestore
                 await addDoc(collection(db, "notes"), {
@@ -131,11 +124,17 @@ export function NoteSummarizer() {
                 toast.success("Summary generated successfully!")
             }
         )
-    }
+    }, [user])
 
-    const triggerFileInput = () => {
+    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            handleUpload(e.target.files[0])
+        }
+    }, [handleUpload])
+
+    const triggerFileInput = useCallback(() => {
         fileInputRef.current?.click()
-    }
+    }, [])
 
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">

@@ -151,33 +151,42 @@ export async function checkScheduleConflict(userId: string, date: Date, time: st
     const newEnd = new Date(newStart.getTime() + durationMinutes * 60000)
 
     // 2. Query existing schedule for the day
+    // OPTIMIZATION: Query ALL user schedules and filter in memory to avoid "Composite Index" requirements on dev environments.
+    // In production with thousands of records, we would add the index. For now, this is safer.
+
+    const q = adminDb.collection(SCHEDULE_COLLECTION)
+        .where("userId", "==", userId)
+
+    const snapshot = await q.get()
+
+    // Filter for the specific day in memory
     const startOfDay = new Date(date)
     startOfDay.setHours(0, 0, 0, 0)
     const endOfDay = new Date(date)
     endOfDay.setHours(23, 59, 59, 999)
 
-    const q = adminDb.collection(SCHEDULE_COLLECTION)
-        .where("userId", "==", userId)
-        .where("scheduledDate", ">=", Timestamp.fromDate(startOfDay))
-        .where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
-
-    const snapshot = await q.get()
-
     for (const docSnap of snapshot.docs) {
         if (excludeScheduleId && docSnap.id === excludeScheduleId) continue
 
         const data = docSnap.data()
+
+        // Date Check (Memory)
+        const scheduledDateRaw = data.scheduledDate
+        const sDate = scheduledDateRaw.toDate ? scheduledDateRaw.toDate() : new Date(scheduledDateRaw)
+        if (sDate < startOfDay || sDate > endOfDay) continue
+
         let existingDuration = data.durationMinutes
-        if (!existingDuration) {
+
+        // OPTIMIZATION: If durationMinutes is missing (legacy), fetch from task only if needed.
+        if (existingDuration === undefined) {
             const taskSnap = await adminDb.collection(TASKS_COLLECTION).doc(data.taskId).get()
-            if (taskSnap.exists) existingDuration = taskSnap.data()?.durationMinutes
+            existingDuration = taskSnap.exists ? taskSnap.data()?.durationMinutes : 60
         }
 
         const existingTime = data.scheduledTime
         const [h, m] = existingTime.split(":").map(Number)
-        // Check if it's a Firestore Timestamp or Date
-        const scheduledDateRaw = data.scheduledDate
-        const existingStart = scheduledDateRaw.toDate ? scheduledDateRaw.toDate() : new Date(scheduledDateRaw)
+
+        const existingStart = new Date(sDate)
         existingStart.setHours(h, m, 0, 0)
         const existingEnd = new Date(existingStart.getTime() + (existingDuration || 60) * 60000)
 
@@ -201,18 +210,22 @@ export async function checkDailyLimit(userId: string, date: Date, addedDurationM
 
     const q = adminDb.collection(SCHEDULE_COLLECTION)
         .where("userId", "==", userId)
-        .where("scheduledDate", ">=", Timestamp.fromDate(startOfDay))
-        .where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
 
     const snapshot = await q.get()
     let totalMinutes = 0
 
     for (const docSnap of snapshot.docs) {
         const data = docSnap.data()
+
+        // Date Check (Memory)
+        const scheduledDateRaw = data.scheduledDate
+        const sDate = scheduledDateRaw.toDate ? scheduledDateRaw.toDate() : new Date(scheduledDateRaw)
+        if (sDate < startOfDay || sDate > endOfDay) continue
+
         let duration = data.durationMinutes
-        if (!duration) {
+        if (duration === undefined) {
             const taskSnap = await adminDb.collection(TASKS_COLLECTION).doc(data.taskId).get()
-            if (taskSnap.exists) duration = taskSnap.data()?.durationMinutes
+            duration = taskSnap.exists ? taskSnap.data()?.durationMinutes : 60
         }
         totalMinutes += (duration || 0)
     }

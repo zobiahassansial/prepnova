@@ -1,8 +1,6 @@
 "use client"
 
-"use client"
-
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/components/providers/auth-provider"
 import { ResumeForm } from "./resume-form"
 import { ResumePreview } from "./resume-preview"
@@ -89,8 +87,13 @@ export function ResumeBuilder() {
     // This implies selectedTemplate might be "modern" but effectively it's "basic".
     // Okay, i'll implement that logic.
 
-    const activeResumeTemplate = resumeTemplateTouched ? resumeData.template : "basic"
-    const activeCoverTemplate = coverTemplateTouched ? (resumeData.coverTemplate || "modern") : "modern" // Default cover to modern if untouched? Or basic? User didn't say. Let's assume modern or match resume.
+    const activeResumeTemplate = useMemo(() =>
+        resumeTemplateTouched ? resumeData.template : "basic",
+        [resumeTemplateTouched, resumeData.template])
+
+    const activeCoverTemplate = useMemo(() =>
+        coverTemplateTouched ? (resumeData.coverTemplate || "modern") : "modern",
+        [coverTemplateTouched, resumeData.coverTemplate])
 
 
 
@@ -123,7 +126,7 @@ export function ResumeBuilder() {
         }
     }, [user])
 
-    const handleSave = async () => {
+    const handleSave = useCallback(async () => {
         if (!user) return
         setLoading(true)
 
@@ -157,7 +160,20 @@ export function ResumeBuilder() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [user, resumeData])
+
+    const handlePrintClick = useCallback(() => {
+        document.getElementById("print-resume")?.click()
+    }, [])
+
+    const handleSelectResumeTemplate = useCallback((id: string) => {
+        setResumeTemplateTouched(true)
+        setResumeData(prev => ({ ...prev, template: id as any }))
+    }, [])
+
+    const handleSelectCoverTemplate = useCallback((id: string) => {
+        setResumeData(prev => ({ ...prev, coverTemplate: id as any }))
+    }, [])
 
     return (
         <div className="flex flex-col h-[calc(100vh-6rem)]">
@@ -181,10 +197,7 @@ export function ResumeBuilder() {
                                 <TemplateGallery
                                     selected={resumeData.template}
                                     activeTemplate={activeResumeTemplate}
-                                    onSelect={(id) => {
-                                        setResumeTemplateTouched(true)
-                                        setResumeData({ ...resumeData, template: id as any })
-                                    }}
+                                    onSelect={handleSelectResumeTemplate}
                                 />
                             </PopoverContent>
                         </Popover>
@@ -204,9 +217,7 @@ export function ResumeBuilder() {
                                         selected={resumeData.coverTemplate || "modern"}
                                         activeTemplate={activeCoverTemplate}
                                         type="cover" // Active type
-                                        onSelect={(id) => {
-                                            setResumeData(prev => ({ ...prev, coverTemplate: id as any }))
-                                        }}
+                                        onSelect={handleSelectCoverTemplate}
                                     />
                                 </PopoverContent>
                             </Popover>
@@ -245,7 +256,7 @@ export function ResumeBuilder() {
                     <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => document.getElementById("print-resume")?.click()}
+                        onClick={handlePrintClick}
                     >
                         Export PDF
                     </Button>

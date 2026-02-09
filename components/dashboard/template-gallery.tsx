@@ -1,4 +1,4 @@
-import React from "react"
+import React, { memo } from "react"
 import { cn } from "@/lib/utils"
 // import { TemplateId } from "@/types/resume"
 // Using loose string type to avoid strict enum issues if not fully propagated yet, 
@@ -84,7 +84,7 @@ interface TemplateGalleryProps {
     type?: "resume" | "cover" // Added prop
 }
 
-export function TemplateGallery({ selected, onSelect, type = "resume" }: TemplateGalleryProps) {
+export const TemplateGallery = memo(function TemplateGallery({ selected, onSelect, type = "resume" }: TemplateGalleryProps) {
     const list = type === "cover" ? coverTemplates : templates
 
     return (
@@ -134,10 +134,10 @@ export function TemplateGallery({ selected, onSelect, type = "resume" }: Templat
             ))}
         </div>
     )
-}
+})
 
 
-function MiniPreview({ id, type = "resume" }: { id: string, type?: "resume" | "cover" }) {
+const MiniPreview = memo(function MiniPreview({ id, type = "resume" }: { id: string; type?: "resume" | "cover" }) {
     // If cover type, return simplified text body versions matching the aesthetic
     if (type === "cover") {
         switch (id) {
@@ -296,4 +296,4 @@ function MiniPreview({ id, type = "resume" }: { id: string, type?: "resume" | "c
         default:
             return <div className="bg-gray-100 w-full h-full flex items-center justify-center text-gray-400">?</div>
     }
-}
+})

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/components/providers/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -32,6 +32,20 @@ export function SettingsForm() {
     const [storageUsage, setStorageUsage] = useState({ used: 0, total: 100 * 1024 * 1024 }) // 100MB mocked limit
 
     // --- Effects ---
+    const fetchUploads = useCallback(async () => {
+        if (!user) return
+
+        // 1. Fetch from Firestore (Notes)
+        const notesQ = query(collection(db, "notes"), where("userId", "==", user.uid))
+        const notesSnap = await getDocs(notesQ)
+        const noteFiles = notesSnap.docs.map(d => ({ id: d.id, name: d.data().title, type: "Note", size: 0, url: d.data().fileUrl, collection: "notes" }))
+
+        setUploads([...noteFiles])
+
+        // Mock Storage Usage
+        setStorageUsage({ used: noteFiles.length * 1024 * 1024 * 2, total: 100 * 1024 * 1024 }) // Assume 2MB avg
+    }, [user])
+
     useEffect(() => {
         if (user) {
             // Profile Sync
@@ -52,30 +66,12 @@ export function SettingsForm() {
             fetchProfile()
             fetchUploads()
         }
-    }, [user])
-
-    const fetchUploads = async () => {
-        if (!user) return
-
-        // 1. Fetch from Firestore (Notes)
-        const notesQ = query(collection(db, "notes"), where("userId", "==", user.uid))
-        const notesSnap = await getDocs(notesQ)
-        const noteFiles = notesSnap.docs.map(d => ({ id: d.id, name: d.data().title, type: "Note", size: 0, url: d.data().fileUrl, collection: "notes" }))
-
-        // 2. Fetch from Firestore (Decks) - simplistic view
-        // Ideally we track file uploads more centrally, but let's just show notes for now as "files"
-        // Also listing storage directly is expensive/hard without a list API enabled on client which usually isn't.
-        // So we rely on DB records. 
-        setUploads([...noteFiles])
-
-        // Mock Storage Usage
-        setStorageUsage({ used: noteFiles.length * 1024 * 1024 * 2, total: 100 * 1024 * 1024 }) // Assume 2MB avg
-    }
+    }, [user, fetchUploads])
 
     // --- Handlers ---
 
     // 1. Profile
-    const handleSaveProfile = async () => {
+    const handleSaveProfile = useCallback(async () => {
         if (!user) return
         setLoading(true)
         try {
@@ -91,9 +87,9 @@ export function SettingsForm() {
         } catch (e: any) {
             toast.error("Error: " + e.message)
         } finally { setLoading(false) }
-    }
+    }, [user, profileData, router])
 
-    const handlePhotoUpload = async (e: any) => {
+    const handlePhotoUpload = useCallback(async (e: any) => {
         const file = e.target.files[0]
         if (!file || !user) return
 
@@ -102,9 +98,9 @@ export function SettingsForm() {
         const url = await getDownloadURL(storageRef)
         setProfileData(prev => ({ ...prev, photoURL: url }))
         toast.success("Photo uploaded")
-    }
+    }, [user])
 
-    const handlePassChange = async () => {
+    const handlePassChange = useCallback(async () => {
         if (!user) return
         if (passwords.new !== passwords.confirm) return toast.error("Passwords do not match")
 
@@ -115,17 +111,16 @@ export function SettingsForm() {
         } catch (e: any) {
             toast.error("Error: " + e.message)
         }
-    }
+    }, [user, passwords])
 
     // 2. Security
-    const handleLogout = async () => {
-        // Use unified logout from AuthProvider
-        const { logout } = useAuth()
+    const { logout } = useAuth()
+    const handleLogout = useCallback(async () => {
         if (logout) await logout()
-    }
+    }, [logout])
 
     // 3. Uploads
-    const handleDeleteFile = async (file: any) => {
+    const handleDeleteFile = useCallback(async (file: any) => {
         if (!confirm("Delete this file?")) return
         try {
             // Delete doc
@@ -137,17 +132,17 @@ export function SettingsForm() {
         } catch (e) {
             toast.error("Failed to delete")
         }
-    }
+    }, [fetchUploads])
 
     // 4. Preferences
-    const savePreferences = async () => {
+    const savePreferences = useCallback(async () => {
         if (!user) return
         await updateDoc(doc(db, "users", user.uid), { ...preferences })
         toast.success("Preferences saved")
-    }
+    }, [user, preferences])
 
     // 5. Account Privacy
-    const downloadData = () => {
+    const downloadData = useCallback(() => {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(profileData))
         const downloadAnchorNode = document.createElement('a')
         downloadAnchorNode.setAttribute("href", dataStr)
@@ -155,13 +150,13 @@ export function SettingsForm() {
         document.body.appendChild(downloadAnchorNode)
         downloadAnchorNode.click()
         downloadAnchorNode.remove()
-    }
+    }, [profileData])
 
-    const deleteAccount = async () => {
+    const deleteAccount = useCallback(async () => {
         if (!confirm("PERMANENTLY DELETE ACCOUNT? This cannot be undone.")) return
         // In real app, call API to delete user data + auth
         toast.error("Contact support to delete account permanently (Safety Check)")
-    }
+    }, [])
 
 
     return (
@@ -321,7 +316,7 @@ export function SettingsForm() {
                                 <p className="text-sm text-muted-foreground">Receive updates about your study progress.</p>
                             </div>
                             <Switch checked={preferences.emailNotifs} onCheckedChange={checked => {
-                                setPreferences({ ...preferences, emailNotifs: checked })
+                                setPreferences(prev => ({ ...prev, emailNotifs: checked }))
                                 // Trigger save immediately or use save button
                                 setTimeout(() => savePreferences(), 0)
                             }} />

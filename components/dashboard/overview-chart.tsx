@@ -1,8 +1,9 @@
 "use client"
 
+import { memo } from "react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts"
 
-export function OverviewChart({ data }: { data?: { name: string, total: number }[] }) {
+export const OverviewChart = memo(function OverviewChart({ data }: { data?: { name: string, total: number }[] }) {
     if (!data || data.length === 0) {
         return (
             <div className="flex items-center justify-center h-[350px] text-muted-foreground text-sm">
@@ -37,4 +38,4 @@ export function OverviewChart({ data }: { data?: { name: string, total: number }
             </BarChart>
         </ResponsiveContainer>
     )
-}
+})

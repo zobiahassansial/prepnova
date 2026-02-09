@@ -1,7 +1,7 @@
 "use client"
 
 import { ResumeData } from "@/types/resume"
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useCallback, useMemo } from "react"
 import { useReactToPrint } from "react-to-print"
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
@@ -40,10 +40,10 @@ export function ResumePreview({ data, onPageCountChange }: ResumePreviewProps) {
         documentTitle: `Resume - ${data.personalInfo.fullName || "User"}`,
     })
 
-    const isSectionVisible = (type: string) => {
+    const isSectionVisible = useCallback((type: string) => {
         const section = data.sections.find(s => s.type === type)
         return section?.isVisible ?? true
-    }
+    }, [data.sections])
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden">

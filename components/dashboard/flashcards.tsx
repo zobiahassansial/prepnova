@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Plus, Play, RotateCw, Brain, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
@@ -71,7 +71,7 @@ export function FlashcardsApp() {
         return () => unsubscribeAuth()
     }, [])
 
-    const handleGenerateAI = async () => {
+    const handleGenerateAI = useCallback(async () => {
         if (!user || !aiFile || !aiTitle) return
         setLoading(true)
 
@@ -110,9 +110,6 @@ export function FlashcardsApp() {
 
             await incrementQuota(user.uid, "flashcard")
 
-            // Remove server action check
-            // if (res.error) throw new Error(res.error)
-
             toast.success("Deck generated successfully!")
             setAiOpen(false)
             setAiFile(null)
@@ -123,18 +120,19 @@ export function FlashcardsApp() {
             toast.error(e.message || "Failed to generate deck")
         } finally {
             setAiLoading(false)
+            setLoading(false)
         }
-    }
+    }, [user, aiFile, aiTitle])
 
 
-    const handleStartStudy = (deck: Deck) => {
+    const handleStartStudy = useCallback((deck: Deck) => {
         setActiveDeck(deck)
         setStudyMode(true)
         setCurrentCardIndex(0)
         setIsFlipped(false)
-    }
+    }, [])
 
-    const handleNextCard = () => {
+    const handleNextCard = useCallback(() => {
         if (activeDeck && currentCardIndex < activeDeck.cards.length - 1) {
             setCurrentCardIndex(prev => prev + 1)
             setIsFlipped(false)
@@ -142,9 +140,9 @@ export function FlashcardsApp() {
             toast.success("Deck completed!")
             setStudyMode(false)
         }
-    }
+    }, [activeDeck, currentCardIndex])
 
-    const handleCreateDeck = async () => {
+    const handleCreateDeck = useCallback(async () => {
         if (!newDeckTitle || !user) return
         setLoading(true)
 
@@ -185,7 +183,7 @@ export function FlashcardsApp() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [newDeckTitle, user])
 
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">

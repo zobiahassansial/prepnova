@@ -1,10 +1,11 @@
 "use client"
 
+import { memo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Sparkles } from "lucide-react"
 
-export function WelcomeBanner({ name, streak }: { name: string, streak: number }) {
+export const WelcomeBanner = memo(function WelcomeBanner({ name, streak }: { name: string, streak: number }) {
     return (
         <Card className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
             <CardContent className="p-6">
@@ -26,4 +27,4 @@ export function WelcomeBanner({ name, streak }: { name: string, streak: number }
             </CardContent>
         </Card>
     )
-}
+})

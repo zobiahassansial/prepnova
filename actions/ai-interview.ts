@@ -1,10 +1,8 @@
 "use server"
 
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { getGeminiModel } from "@/lib/gemini"
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-// ✅ Using the latest Flash Lite model for speed
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }) 
+const model = getGeminiModel()
 
 export async function getLiveInterviewHelp(transcript: string) {
     if (!transcript) return { error: "No text detected" }
@@ -21,7 +19,7 @@ export async function getLiveInterviewHelp(transcript: string) {
 
         const result = await model.generateContent(prompt)
         const answer = result.response.text()
-        
+
         return { success: true, answer }
     } catch (error) {
         return { error: "Failed to generate answer" }
@@ -39,7 +37,7 @@ export async function generateInterviewResponse(messages: { role: string, conten
         const systemInstruction = `
             You are a professional HR interviewer. Ask ONE question at a time.
         `
-        
+
         const lastMessage = messages[messages.length - 1].content;
         const historyWithoutLast = history.slice(0, -1);
 

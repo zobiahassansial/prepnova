@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2, Sparkles, Loader2 } from "lucide-react"
-import { useState, useRef } from "react"
+import { useState, useRef, useCallback, useMemo } from "react"
+import { toast } from "sonner"
 
 interface ResumeFormProps {
     data: ResumeData
@@ -17,14 +18,14 @@ interface ResumeFormProps {
 export function ResumeForm({ data, onChange }: ResumeFormProps) {
     const [jobDescription, setJobDescription] = useState("")
 
-    const updatePersonalInfo = (field: string, value: string) => {
+    const updatePersonalInfo = useCallback((field: string, value: string) => {
         onChange({
             ...data,
             personalInfo: { ...data.personalInfo, [field]: value }
         })
-    }
+    }, [data, onChange])
 
-    const addExperience = () => {
+    const addExperience = useCallback(() => {
         const newItem = {
             id: Date.now().toString(),
             company: "New Company",
@@ -36,7 +37,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
             description: ""
         }
         onChange({ ...data, experience: [...data.experience, newItem] })
-    }
+    }, [data, onChange])
 
     // Generic update handler could be cleaner with a custom hook or specialized components
     // For now, inline handlers for speed given this phase
@@ -54,7 +55,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
     const jobDescriptionRef = useRef<HTMLTextAreaElement>(null)
 
     // STRICT Validation Logic
-    const validate = () => {
+    const validation = useMemo(() => {
         const isFullNameValid = !!data.personalInfo.fullName?.trim()
         const isEmailValid = !!data.personalInfo.email?.trim()
         const isJobDescriptionValid = jobDescription.trim().length >= 20
@@ -81,15 +82,13 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
             hasValidSkills,
             hasContent: hasValidExperience || hasValidEducation || hasValidSkills
         }
-    }
+    }, [data, jobDescription])
 
-    const { toast } = require("sonner")
-
-    const handleAIGenerate = async (e: React.MouseEvent) => {
+    const handleAIGenerate = useCallback(async (e: React.MouseEvent) => {
         // Prevent default if it's a form submission (though it's a button here)
         e.preventDefault()
 
-        const { isFullNameValid, isEmailValid, hasValidExperience, hasValidEducation, hasValidSkills, hasContent, isJobDescriptionValid } = validate()
+        const { isFullNameValid, isEmailValid, hasValidExperience, hasValidEducation, hasValidSkills, hasContent, isJobDescriptionValid } = validation
 
         if (!isFullNameValid || !isEmailValid || !hasContent || !isJobDescriptionValid) {
             setShowErrors(true)
@@ -126,9 +125,9 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
         } finally {
             setGenerating(false)
         }
-    }
+    }, [data, validation, onChange])
 
-    const addEducation = () => {
+    const addEducation = useCallback(() => {
         const newItem = {
             id: Date.now().toString(),
             school: "University",
@@ -139,7 +138,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
             location: "",
         }
         onChange({ ...data, education: [...data.education, newItem] })
-    }
+    }, [data, onChange])
 
     return (
         <div className="space-y-6">
@@ -384,7 +383,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                 <AccordionItem value="experience">
                     <AccordionTrigger ref={experienceRef}>Experience</AccordionTrigger>
                     <AccordionContent className="space-y-4 pt-2">
-                        {showErrors && !validate().hasContent && (
+                        {showErrors && !validation.hasContent && (
                             <p className="text-xs text-red-500 mb-2 font-bold animate-pulse">
                                 Add at least one valid: Experience, Education, or Skills (Must have description &gt; 20 chars)
                             </p>

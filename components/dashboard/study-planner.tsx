@@ -1,6 +1,6 @@
-"use client"
+﻿"use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, Clock, BookOpen, CheckCircle2, Loader2, Sparkles, Filter, Play, Trash2, MoreVertical } from "lucide-react"
@@ -10,9 +10,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StudyCalendar } from "@/components/study-planner/study-calendar"
+import { Calendar } from "@/components/ui/calendar"
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop"
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css"
+import { motion, AnimatePresence } from "framer-motion"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+import { CalendarIcon } from "lucide-react"
+import { format } from "date-fns"
 import { generateStudyPlan, scheduleUserTasks } from "@/actions/ai-planner"
 import { createStudyTask, logStudyActivity, scheduleStudyTask, unscheduleStudyTask, checkScheduleConflict, checkDailyLimit, deleteStudyTask, deleteAllScheduledTasks, deleteAllUnscheduledTasks, updateTaskOrder } from "@/actions/study-planner"
 import { checkLimit, incrementUsage, getUserSubscription } from "@/lib/limits"
@@ -22,101 +29,76 @@ import { logActivity } from "@/lib/logger"
 import { StudyTask, StudySchedule, Priority, Difficulty, TaskStatus } from "@/types/study-planner"
 import { onAuthStateChanged } from "firebase/auth"
 
+const formatTime = (time: string) => {
+    const [h, m] = time.split(":").map(Number)
+    const date = new Date()
+    date.setHours(h, m)
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+}
+
+const formatTimeRange = (time: string, durationMinutes: number) => {
+    const [h, m] = time.split(":").map(Number)
+    const start = new Date()
+    start.setHours(h, m, 0, 0)
+    const end = new Date(start.getTime() + durationMinutes * 60000)
+    const format = (d: Date) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    return `${format(start)} - ${format(end)}`
+}
+
 export function StudyPlanner() {
-    const [createLoading, setCreateLoading] = useState(false)
+
+    const [user, setUser] = useState<any>(null)
     const [tasks, setTasks] = useState<StudyTask[]>([])
     const [schedule, setSchedule] = useState<StudySchedule[]>([])
-    const [loading, setLoading] = useState(true)
-    const [detailOpen, setDetailOpen] = useState(false)
-    const [createOpen, setCreateOpen] = useState(false)
-    const [newTaskOpen, setNewTaskOpen] = useState(false)
-    const [aiOpen, setAiOpen] = useState(false)
-    const [showCalendar, setShowCalendar] = useState(false)
-    const [selectedTask, setSelectedTask] = useState<StudyTask | null>(null)
     const [draggedTask, setDraggedTask] = useState<StudyTask | null>(null)
-    const [user, setUser] = useState<any>(null)
-    const formatTime = (time: string) => {
-        const [h, m] = time.split(":").map(Number)
-        const date = new Date()
-        date.setHours(h, m)
-        return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-    }
-    // ... existing state definitions ...
+    const [activeTab, setActiveTab] = useState<string>(new Date().toDateString())
+    const [showCalendar, setShowCalendar] = useState(false)
+    const [aiOpen, setAiOpen] = useState(false)
+    const [newTaskOpen, setNewTaskOpen] = useState(false)
+    const [createLoading, setCreateLoading] = useState(false)
+    const [detailOpen, setDetailOpen] = useState(false)
+    const [selectedTask, setSelectedTask] = useState<StudyTask | null>(null)
+    const [dropIndicator, setDropIndicator] = useState<{ id: string, position: 'top' | 'bottom' } | null>(null)
 
-    // ADD THIS FUNCTION
-    const formatTimeRange = (time: string, durationMinutes: number) => {
-        const [h, m] = time.split(":").map(Number)
-
-        // Calculate Start
-        const start = new Date()
-        start.setHours(h, m, 0, 0)
-
-        // Calculate End
-        const end = new Date(start.getTime() + durationMinutes * 60000)
-
-        // Format both
-        const format = (d: Date) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-
-        return `${format(start)} - ${format(end)}`
-    }
-
-    // ... useEffect ...
-
+    // --- Auth & Data Fetching ---
     useEffect(() => {
-        const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-            if (currentUser) {
-                setUser(currentUser)
-
-                // Fetch Tasks
-                const tasksQuery = query(collection(db, "study_tasks"), where("userId", "==", currentUser.uid))
-                const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
-                    const fetched = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    })) as StudyTask[]
-                    setTasks(fetched)
-                })
-
-                // Fetch Schedule
-                const scheduleQuery = query(collection(db, "study_schedule"), where("userId", "==", currentUser.uid))
-                const unsubscribeSchedule = onSnapshot(scheduleQuery, (snapshot) => {
-                    const fetched = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    })) as StudySchedule[]
-                    setSchedule(fetched)
-                })
-
-                return () => {
-                    unsubscribeTasks()
-                    unsubscribeSchedule()
-                }
-            } else {
-                setTasks([])
-                setSchedule([])
-            }
-        })
-        return () => unsubscribeAuth()
+        return onAuthStateChanged(auth, setUser)
     }, [])
 
-    const handleEventDrop = async ({ event, start, end }: any) => {
-        try {
-            // event.id is the schedule ID
-            // We update the schedule doc
-            const scheduleRef = doc(db, "study_schedule", event.id)
+    useEffect(() => {
+        if (!user) {
+            setTasks([])
+            setSchedule([])
+            return
+        }
 
-            // Format time HH:MM
+        const tasksQuery = query(collection(db, "study_tasks"), where("userId", "==", user.uid))
+        const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
+            const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as StudyTask[]
+            setTasks(fetched)
+        }, (err) => console.error("Tasks Snapshot Error:", err))
+
+        const scheduleQuery = query(collection(db, "study_schedule"), where("userId", "==", user.uid))
+        const unsubscribeSchedule = onSnapshot(scheduleQuery, (snapshot) => {
+            const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as StudySchedule[]
+            setSchedule(fetched)
+        }, (err) => console.error("Schedule Snapshot Error:", err))
+
+        return () => {
+            unsubscribeTasks()
+            unsubscribeSchedule()
+        }
+    }, [user])
+
+    const handleEventDrop = useCallback(async ({ event, start, end }: any) => {
+        try {
+            const scheduleRef = doc(db, "study_schedule", event.id)
             const hours = start.getHours().toString().padStart(2, '0')
             const minutes = start.getMinutes().toString().padStart(2, '0')
             const time = `${hours}:${minutes}`
-
-            // Validation: Check Conflict (Exclude current schedule ID)
-            // We need duration. event.resource.durationMinutes SHOULD be present if we mapped it correctly.
-            // In StudyCalendar mapping: resource has { ...task, ...s }. s has durationMinutes (now that we save it).
-            // Or task has it.
             const duration = event.resource.durationMinutes || 60
 
-            const hasConflict = await checkScheduleConflict(user.uid, start, time, duration, event.id)
+            const hasConflict = await checkScheduleConflict(user?.uid, start, time, duration, event.id)
             if (hasConflict) {
                 toast.error("Schedule conflict detected!")
                 return
@@ -127,51 +109,66 @@ export function StudyPlanner() {
                 scheduledTime: time
             })
 
-            await logStudyActivity(user.uid, event.taskId, "rescheduled", `Rescheduled to ${start.toLocaleString()}`)
-
+            await logStudyActivity(user?.uid, event.taskId, "rescheduled", `Rescheduled to ${start.toLocaleString()}`)
             toast.success("Task rescheduled")
         } catch (e) {
             console.error(e)
             toast.error("Failed to reschedule task")
         }
-    }
+    }, [user])
 
-    const onDropFromOutside = async ({ start, end, allDay }: any) => {
-        if (!draggedTask) return
+    const onDropFromOutside = useCallback(async ({ start, end, allDay }: any) => {
+        if (!draggedTask || !user) return
 
         try {
-            // Schedule the task
-            // Format time HH:MM
             const hours = start.getHours().toString().padStart(2, '0')
             const minutes = start.getMinutes().toString().padStart(2, '0')
             const time = `${hours}:${minutes}`
 
-            // Validation: Check Daily Limit (6h)
-            // Duration is in draggedTask.durationMinutes
-            const isLimitExceeded = await checkDailyLimit(user.uid, start, draggedTask.durationMinutes)
-            if (isLimitExceeded) {
-                toast.error("Daily study limit (6h) exceeded!")
-                setDraggedTask(null)
-                return
+            const duration = draggedTask.durationMinutes || 60
+            const scheduleId = (draggedTask as any).scheduleId
+
+            if (scheduleId) {
+                const hasConflict = await checkScheduleConflict(user.uid, start, time, duration, scheduleId)
+                if (hasConflict) {
+                    toast.error("Schedule conflict detected!")
+                    setDraggedTask(null)
+                    return
+                }
+
+                const scheduleRef = doc(db, "study_schedule", scheduleId)
+                await updateDoc(scheduleRef, {
+                    scheduledDate: Timestamp.fromDate(start),
+                    scheduledTime: time
+                })
+
+                await logStudyActivity(user.uid, draggedTask.id, "rescheduled", `Rescheduled to ${start.toLocaleString()}`)
+                toast.success("Task rescheduled")
+            } else {
+                const isLimitExceeded = await checkDailyLimit(user.uid, start, duration)
+                if (isLimitExceeded) {
+                    toast.error("Daily study limit (6h) exceeded!")
+                    setDraggedTask(null)
+                    return
+                }
+
+                const hasConflict = await checkScheduleConflict(user.uid, start, time, duration)
+                if (hasConflict) {
+                    toast.error("Schedule conflict detected!")
+                    setDraggedTask(null)
+                    return
+                }
+
+                await scheduleStudyTask(user.uid, draggedTask.id, start, time)
+                toast.success(`Scheduled: ${draggedTask.title}`)
             }
 
-            // Validation: Check Conflict
-            const hasConflict = await checkScheduleConflict(user.uid, start, time, draggedTask.durationMinutes)
-            if (hasConflict) {
-                toast.error("Schedule conflict detected!")
-                setDraggedTask(null)
-                return
-            }
-
-            await scheduleStudyTask(user.uid, draggedTask.id, start, time)
-
-            toast.success(`Scheduled: ${draggedTask.title}`)
             setDraggedTask(null)
         } catch (e) {
             console.error(e)
-            toast.error("Failed to schedule task")
+            toast.error("Failed to update task")
         }
-    }
+    }, [draggedTask, user])
 
     const [newTaskData, setNewTaskData] = useState({
         title: "",
@@ -184,7 +181,7 @@ export function StudyPlanner() {
         scheduledTime: undefined as string | undefined
     })
 
-    const handleCreateTask = async () => {
+    const handleCreateTask = useCallback(async () => {
         if (!user) {
             toast.error("User not authenticated")
             return
@@ -206,12 +203,18 @@ export function StudyPlanner() {
                 durationMinutes: Number(newTaskData.duration)
             })
 
-            // If scheduledDate/Time are present (from drag-and-drop creation), schedule it immediately
             if (newTaskData.scheduledDate && newTaskData.scheduledTime) {
                 await scheduleStudyTask(user.uid, taskId, newTaskData.scheduledDate, newTaskData.scheduledTime)
                 toast.success("Task created and scheduled")
+            } else if (newTaskData.scheduledDate) {
+                await scheduleStudyTask(user.uid, taskId, newTaskData.scheduledDate, "09:00")
+                toast.success("Task scheduled for morning")
             } else {
                 toast.success("Task created")
+            }
+
+            if (newTaskData.scheduledDate) {
+                setActiveTab(newTaskData.scheduledDate.toDateString())
             }
 
             setNewTaskOpen(false)
@@ -230,10 +233,9 @@ export function StudyPlanner() {
         } finally {
             setCreateLoading(false)
         }
-    }
+    }, [user, newTaskData])
 
-    const handleSelectSlot = (slotInfo: any) => {
-        // slotInfo.start is the Date object where the user clicked/dragged
+    const handleSelectSlot = useCallback((slotInfo: any) => {
         const start = slotInfo.start as Date
         const time = `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')}`
 
@@ -243,31 +245,26 @@ export function StudyPlanner() {
             scheduledTime: time
         }))
         setNewTaskOpen(true)
-    }
+        if (start) setActiveTab(start.toDateString())
+    }, [])
 
-    const handleSelectEvent = (event: any) => {
-        // Event resource is the task object
+    const handleSelectEvent = useCallback((event: any) => {
         setSelectedTask(event.resource)
         setDetailOpen(true)
-    }
+    }, [])
 
-    const handleCompleteTask = async () => {
+    const handleCompleteTask = useCallback(async () => {
         if (!selectedTask || !user) return
         try {
             const taskRef = doc(db, "study_tasks", selectedTask.id)
             await updateDoc(taskRef, { status: "completed" })
-
-            // Log Activity
             await logStudyActivity(user.uid, selectedTask.id, "completed", `Task completed: ${selectedTask.title}`)
-
             toast.success("Task completed!")
             setDetailOpen(false)
         } catch (e) {
             toast.error("Failed to complete task")
         }
-    }
-    console.log("SCHEDULE STATE:", schedule)
-    console.log("TASKS STATE:", tasks)
+    }, [selectedTask, user])
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
             <div className="flex items-center justify-between">
@@ -348,43 +345,42 @@ export function StudyPlanner() {
                             <label>Subject</label>
                             <Input value={newTaskData.subject} onChange={e => setNewTaskData({ ...newTaskData, subject: e.target.value })} placeholder="e.g. Biology" />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                                <label>Date (Optional)</label>
-                                <Input
-                                    type="date"
-                                    value={newTaskData.scheduledDate ? newTaskData.scheduledDate.toISOString().split('T')[0] : ''}
-                                    onChange={e => setNewTaskData({ ...newTaskData, scheduledDate: e.target.value ? new Date(e.target.value) : undefined })}
-                                />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Select Date</label>
+                                    <Calendar
+                                        value={(newTaskData.scheduledDate || (activeTab ? new Date(activeTab) : new Date())).toISOString().split('T')[0]}
+                                        onChange={(e) => {
+                                            const date = e.target.valueAsDate
+                                            if (date) {
+                                                const adjustedDate = new Date(date.getTime() + date.getTimezoneOffset() * 60000)
+                                                setNewTaskData({ ...newTaskData, scheduledDate: adjustedDate })
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="grid gap-2">
+                                        <label className="text-sm font-medium">Duration (min)</label>
+                                        <Input type="number" value={newTaskData.duration} onChange={e => setNewTaskData({ ...newTaskData, duration: e.target.value })} />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <label className="text-sm font-medium">Priority</label>
+                                        <select
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                                            value={newTaskData.priority}
+                                            onChange={e => setNewTaskData({ ...newTaskData, priority: e.target.value as any })}
+                                        >
+                                            <option>High</option>
+                                            <option>Medium</option>
+                                            <option>Low</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="grid gap-2">
-                                <label>Time (Optional)</label>
-                                <Input
-                                    type="time"
-                                    value={newTaskData.scheduledTime || ''}
-                                    onChange={e => setNewTaskData({ ...newTaskData, scheduledTime: e.target.value || undefined })}
-                                />
-                            </div>
+                            <Button onClick={handleCreateTask} disabled={createLoading} className="mt-6">{createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create Task</Button>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                                <label>Duration (min)</label>
-                                <Input type="number" value={newTaskData.duration} onChange={e => setNewTaskData({ ...newTaskData, duration: e.target.value })} />
-                            </div>
-                            <div className="grid gap-2">
-                                <label>Priority</label>
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                                    value={newTaskData.priority}
-                                    onChange={e => setNewTaskData({ ...newTaskData, priority: e.target.value as any })}
-                                >
-                                    <option>High</option>
-                                    <option>Medium</option>
-                                    <option>Low</option>
-                                </select>
-                            </div>
-                        </div>
-                        <Button onClick={handleCreateTask} disabled={createLoading}>{createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create Task</Button>
                     </div>
                 </DialogContent>
             </Dialog>
@@ -400,7 +396,8 @@ export function StudyPlanner() {
                     <AIPlanGenerator
                         user={user}
                         onClose={() => setAiOpen(false)}
-                        existingTasks={tasks.filter(t => t.status === "unscheduled")}
+                        existingTasks={tasks.filter((t: StudyTask) => t.status === "unscheduled")}
+                        targetDate={activeTab}
                     />
 
                 </DialogContent>
@@ -413,8 +410,8 @@ export function StudyPlanner() {
                     {showCalendar ? (
                         schedule.length > 0 ? (
                             <StudyCalendar
-                                events={schedule.map(s => {
-                                    const task = tasks.find(t => t.id === s.taskId)
+                                events={useMemo(() => schedule.map((s: StudySchedule) => {
+                                    const task = tasks.find((t: StudyTask) => t.id === s.taskId)
                                     if (!task) return null
                                     const start = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
                                     const [hours, mins] = s.scheduledTime.split(":").map(Number)
@@ -428,7 +425,7 @@ export function StudyPlanner() {
                                         end,
                                         resource: { ...task, scheduleId: s.id }
                                     }
-                                }).filter(Boolean)}
+                                }).filter(Boolean), [schedule, tasks]) as any}
                                 // @ts-ignore
                                 onEventDrop={handleEventDrop}
                                 onSelectEvent={handleSelectEvent}
@@ -448,239 +445,190 @@ export function StudyPlanner() {
                             </div>
                         )
                     ) : (
-                        // SCHEDULED TASKS LIST VIEW (MANUAL SORT)
-                        <div className="space-y-4">
-                            <h2 className="text-lg font-semibold tracking-tight">Scheduled Tasks</h2>
-                            <div
-                                className="space-y-2 min-h-[200px]"
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={async (e) => {
-                                    e.preventDefault()
-                                    try {
-                                        const data = e.dataTransfer.getData("application/json")
-                                        if (!data) return
-                                        const item = JSON.parse(data) // The task being dragged
 
-                                        // 1. Determine Drop Index & Surrounding Tasks
-                                        // We need to know WHERE in the list it was dropped.
-                                        // This is tricky with standard HTML5 DnD without individual drop targets.
-                                        // Simple approach: Use e.target to find closest row?
-                                        // Better approach: Since we can't easily get precise index in a container drop,
-                                        // we let the user drop ONTO a task to insert before/after.
-                                        // BUT for container drop (append), we handle here.
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-semibold tracking-tight">Scheduled Tasks</h2>
+                            </div>
 
-                                        // FALLBACK: If dropped on container (not specific item), append to end.
-                                        // We will add specific drop handlers to items below.
-
-                                    } catch (err) { }
-                                }}
-                            >
-                                {schedule.length > 0 ? (
-                                    schedule
-                                        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
-                                        .map((s, index, array) => {
-                                            const task = tasks.find(t => t.id === s.taskId)
-                                            if (!task) return null
-                                            const isCompleted = task.status === "completed"
-
-                                            return (
-                                                <div
-                                                    key={s.id}
-                                                    draggable={!isCompleted}
-                                                    onDragStart={(e) => {
-                                                        if (isCompleted) {
-                                                            e.preventDefault()
-                                                            return
-                                                        }
-                                                        const dragData = { ...task, scheduleId: s.id, type: 'scheduled', originalIndex: index }
-                                                        e.dataTransfer.setData("application/json", JSON.stringify(dragData))
-                                                    }}
-                                                    onDragOver={(e) => e.preventDefault()}
-                                                    onDrop={async (e) => {
-                                                        e.preventDefault()
-                                                        e.stopPropagation()
-                                                        const data = e.dataTransfer.getData("application/json")
-                                                        if (!data) return
-                                                        const draggedItem = JSON.parse(data)
-
-                                                        if (draggedItem.id === task.id) return // Dropped on self
-
-                                                        // Logic: Insert BEFORE this item
-                                                        // New Order Index = (Prev.Order + This.Order) / 2
-                                                        // What is Prev? array[index - 1]
-
-                                                        const prevItem = index > 0 ? array[index - 1] : null
-                                                        const nextItem = s // We are dropping ON 's', so 's' becomes next
-
-                                                        // Calculate Order Index
-                                                        const prevOrder = prevItem?.orderIndex || 0
-                                                        const nextOrder = nextItem.orderIndex || Date.now()
-                                                        const newOrderIndex = index === 0 ? nextOrder - 1000 : (prevOrder + nextOrder) / 2
-
-                                                        // Calculate Time
-                                                        // Rule: "Compute time ONLY from surrounding tasks"
-                                                        // If we have a prevItem, use its end time.
-                                                        // If not, use nextItem's start time - duration? Or just default.
-
-                                                        let newTime = "09:00"
-                                                        let newDate = new Date()
-
-                                                        if (prevItem) {
-                                                            const pTask = tasks.find(t => t.id === prevItem.taskId)
-                                                            const pDate = prevItem.scheduledDate.toDate ? prevItem.scheduledDate.toDate() : new Date(prevItem.scheduledDate as any)
-                                                            const [ph, pm] = prevItem.scheduledTime.split(":").map(Number)
-                                                            pDate.setHours(ph, pm + (pTask?.durationMinutes || 60), 0, 0) // End Time
-
-                                                            newTime = `${pDate.getHours().toString().padStart(2, '0')}:${pDate.getMinutes().toString().padStart(2, '0')}`
-                                                            newDate = pDate
-                                                        } else {
-                                                            // No prev item, trying to be first.
-                                                            // Take next item's time minus duration? Or just keep same day?
-                                                            const nDate = nextItem.scheduledDate.toDate ? nextItem.scheduledDate.toDate() : new Date(nextItem.scheduledDate as any)
-                                                            newDate = nDate
-                                                            // Keep 9:00 or current? Let's use 09:00 as start of day anchor if first.
-                                                            // Or if draggedItem has a time, use it?
-                                                            // Requirement: "Update scheduledDate + scheduledTime from drop position"
-                                                            // If becoming first, maybe 15 mins before next?
-                                                            const [nh, nm] = nextItem.scheduledTime.split(":").map(Number)
-                                                            const nextStart = new Date(nDate)
-                                                            nextStart.setHours(nh, nm, 0, 0)
-                                                            nextStart.setMinutes(nextStart.getMinutes() - (draggedItem.durationMinutes || 60))
-                                                            newTime = `${nextStart.getHours().toString().padStart(2, '0')}:${nextStart.getMinutes().toString().padStart(2, '0')}`
-                                                        }
-
-                                                        if (!user) return
-
-                                                        if (draggedItem.scheduleId) {
-                                                            // Scheduled -> Scheduled (Reorder)
-                                                            await scheduleStudyTask(user.uid, draggedItem.id, newDate, newTime)
-                                                            toast.success("Task reordered")
-                                                        } else {
-                                                            // Unscheduled -> Scheduled (Schedule it)
-                                                            await scheduleStudyTask(user.uid, draggedItem.id, newDate, newTime)
-                                                            toast.success("Task scheduled")
-                                                        }
-                                                    }}
-                                                    className={`flex items-center justify-between p-4 border rounded-lg transition-colors group ${isCompleted
-                                                        ? "bg-green-60/50 border-green-100 opacity-50"
-                                                        : "bg-card hover:bg-accent/50 cursor-grab active:cursor-grabbing"
-                                                        }`}
+                            {/* Always render Tabs, defaulting to activeTab even if no schedule */}
+                            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                                {/* Browser-like Tab Bar */}
+                                <div className="w-full overflow-x-auto bg-muted/20 pt-2 px-2 rounded-t-lg border-b border-border [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex items-center">
+                                    <TabsList className="w-full justify-start h-auto bg-transparent p-0 space-x-1 flex-1">
+                                        {useMemo(() => {
+                                            const dates = Array.from(new Set([...schedule.map((s: StudySchedule) => {
+                                                const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
+                                                return d.toDateString()
+                                            }), activeTab]))
+                                            return dates.sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())
+                                        }, [schedule, activeTab])
+                                            .map(dateStr => (
+                                                <TabsTrigger
+                                                    key={dateStr}
+                                                    value={dateStr}
+                                                    className="rounded-t-md rounded-b-none border border-transparent data-[state=active]:bg-background data-[state=active]:border-border data-[state=active]:border-b-background data-[state=active]:shadow-none px-4 py-2 text-sm font-medium transition-all relative top-px"
                                                 >
-                                                    <div className="flex items-center gap-4">
-                                                        <div className={`w-1 h-12 rounded-full ${isCompleted ? "bg-green-500" :
-                                                            task.priority === 'High' ? 'bg-red-500' :
-                                                                task.priority === 'Medium' ? 'bg-orange-500' : 'bg-yellow-500'
-                                                            }`} />
-                                                        <div>
-                                                            <div className={`font-medium text-base ${isCompleted ? "line-through text-muted-foreground" : ""}`}>{task.title}</div>
-                                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                                {/* UPDATED: Shows "9:00 AM - 10:00 AM" */}
-                                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">
-                                                                    {formatTimeRange(s.scheduledTime, task.durationMinutes || 60)}
-                                                                </span>
+                                                    {new Date(dateStr).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                                                </TabsTrigger>
+                                            ))}
+                                    </TabsList>
+                                </div>
 
-                                                                <span>{new Date(s.scheduledDate.toDate ? s.scheduledDate.toDate() : s.scheduledDate as any).toLocaleDateString()}</span>
-                                                                <span>•</span>
-                                                                <span>{task.durationMinutes}m</span>
-                                                                <span>•</span>
-                                                                <span>{task.subject}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        {!isCompleted && (
-                                                            <>
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="ghost"
-                                                                    className="h-8 w-8 p-0"
-                                                                    onClick={() => window.location.href = `/study/mode/${task.id}`}
-                                                                    title="Start Session"
-                                                                >
-                                                                    <Play className="h-4 w-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="ghost"
-                                                                    className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                                                    onClick={async () => {
-                                                                        if (!user) return
-                                                                        await unscheduleStudyTask(user.uid, s.id, task.id)
-                                                                        toast.success("Task unscheduled")
-                                                                    }}
-                                                                    title="Unschedule Task"
-                                                                >
-                                                                    <Filter className="h-4 w-4 rotate-180" />
-                                                                </Button>
-                                                                <Button
-                                                                    size="sm"
-                                                                    className="h-8 bg-green-600 hover:bg-green-700 text-white"
-                                                                    onClick={() => {
-                                                                        const doComplete = async () => {
-                                                                            if (!user) return
-                                                                            await updateDoc(doc(db, "study_tasks", task.id), { status: "completed" })
-                                                                            await logStudyActivity(user.uid, task.id, "completed", "Task completed via list")
-                                                                            toast.success("Task completed!")
-                                                                        }
-                                                                        doComplete()
-                                                                    }}
-                                                                    title="Complete Task"
-                                                                >
-                                                                    <CheckCircle2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </>
-                                                        )}
-                                                        {isCompleted && (
-                                                            <Button size="sm" variant="ghost" disabled>
-                                                                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                                            </Button>
-                                                        )}
-                                                        <Button
-                                                            size="sm"
-                                                            variant="destructive"
-                                                            className="h-8 px-2"
-                                                            onClick={async () => {
-                                                                if (!user) return
-                                                                if (confirm("Delete this task?")) {
-                                                                    await deleteStudyTask(user.uid, task.id)
-                                                                    toast.success("Task removed")
-                                                                }
-                                                            }}
-                                                            title="Delete Task"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })
-                                ) : (
+                                <TabsContent value={activeTab} className="mt-4 space-y-4">
                                     <div
-                                        className="text-center p-12 border-2 border-dashed rounded-lg text-muted-foreground"
+                                        className="space-y-2 min-h-[100px]"
+                                        onDragOver={(e) => e.preventDefault()}
                                         onDrop={async (e) => {
-                                            // Handle dropping into empty list
                                             e.preventDefault()
+                                            e.stopPropagation()
+                                            setDropIndicator(null)
                                             const data = e.dataTransfer.getData("application/json")
                                             if (!data) return
                                             const draggedItem = JSON.parse(data)
                                             if (!user) return
 
-                                            // Default for first item
-                                            const now = new Date()
-                                            now.setHours(9, 0, 0, 0)
-                                            if (now < new Date()) now.setHours(new Date().getHours() + 1, 0, 0, 0)
-                                            const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+                                            const dateObj = new Date(activeTab)
+                                            let newTime = "09:00"
 
-                                            await scheduleStudyTask(user.uid, draggedItem.id, now, time)
-                                            toast.success("Task scheduled")
+                                            // Filter for current activeTab tasks only
+                                            const currentDayItems = schedule.filter((s: StudySchedule) => {
+                                                const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
+                                                return d.toDateString() === activeTab
+                                            }).sort((a: StudySchedule, b: StudySchedule) => (a.orderIndex || 0) - (b.orderIndex || 0))
+
+                                            if (currentDayItems.length > 0) {
+                                                const lastItem = currentDayItems[currentDayItems.length - 1]
+                                                const tTask = tasks.find(t => t.id === lastItem.taskId)
+                                                const [lh, lm] = lastItem.scheduledTime.split(":").map(Number)
+                                                const lDate = new Date(dateObj)
+                                                lDate.setHours(lh, lm + (tTask?.durationMinutes || 60), 0, 0)
+                                                newTime = `${lDate.getHours().toString().padStart(2, '0')}:${lDate.getMinutes().toString().padStart(2, '0')}`
+                                            }
+
+                                            // Schedule/Reschedule logic (Use activeTab date)
+                                            if (draggedItem.scheduleId) {
+                                                // Rescheduling: remove from old schedule then add to new
+                                                await unscheduleStudyTask(user.uid, draggedItem.scheduleId, draggedItem.id) // First unschedule
+                                                await scheduleStudyTask(user.uid, draggedItem.id, dateObj, newTime)
+                                                toast.success(`Moved to ${activeTab}`)
+                                            } else {
+                                                // New Schedule
+                                                await scheduleStudyTask(user.uid, draggedItem.id, dateObj, newTime)
+                                                toast.success(`Scheduled for ${activeTab}`)
+                                            }
                                         }}
-                                        onDragOver={e => e.preventDefault()}
                                     >
-                                        <p>No scheduled tasks.</p>
-                                        <p className="text-sm mt-1">Drag tasks from the right sidebar to schedule them.</p>
+                                        <AnimatePresence>
+                                            {useMemo(() => schedule.filter((s: StudySchedule) => {
+                                                const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
+                                                return d.toDateString() === activeTab
+                                            })
+                                                .sort((a: StudySchedule, b: StudySchedule) => {
+                                                    const taskA = tasks.find((t: StudyTask) => t.id === a.taskId)
+                                                    const taskB = tasks.find((t: StudyTask) => t.id === b.taskId)
+                                                    // Completed at bottom
+                                                    if (taskA?.status === 'completed' && taskB?.status !== 'completed') return 1
+                                                    if (taskA?.status !== 'completed' && taskB?.status === 'completed') return -1
+                                                    return (a.orderIndex || 0) - (b.orderIndex || 0)
+                                                }), [schedule, tasks, activeTab])
+                                                .map((s: StudySchedule, index: number) => {
+                                                    const task = tasks.find((t: StudyTask) => t.id === s.taskId)
+                                                    if (!task) return null
+                                                    const isCompleted = task.status === "completed"
+
+                                                    return (
+                                                        <motion.div
+                                                            layout
+                                                            key={s.id}
+                                                            initial={{ opacity: 0, y: 20 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            exit={{ opacity: 0, height: 0 }}
+                                                            className={`relative flex items-center justify-between p-4 border rounded-lg transition-all ${isCompleted
+                                                                ? "bg-white/5 border-white/10 shadow-inner"
+                                                                : "bg-card hover:bg-accent/50 cursor-grab shadow-sm"
+                                                                }`}
+                                                            draggable={!isCompleted}
+                                                            onDragStart={(e: any) => {
+                                                                e.dataTransfer.setData("application/json", JSON.stringify({ ...task, scheduleId: s.id }))
+                                                                setDraggedTask(task)
+                                                            }}
+                                                            onDragEnd={() => setDraggedTask(null)}
+                                                            onDragOver={(e: any) => {
+                                                                e.preventDefault()
+                                                                const rect = e.currentTarget.getBoundingClientRect()
+                                                                const y = e.clientY - rect.top
+                                                                const position = y < rect.height / 2 ? 'top' : 'bottom'
+                                                                setDropIndicator({ id: s.id, position })
+                                                            }}
+                                                        >
+                                                            {dropIndicator?.id === s.id && dropIndicator.position === 'top' && (
+                                                                <div className="absolute -top-3 left-0 right-0 h-0.5 bg-primary z-10" />
+                                                            )}
+
+                                                            <div className="flex items-center gap-4 flex-1">
+                                                                <div className={`w-1 h-12 rounded-full ${task.priority === 'High' ? 'bg-red-500' :
+                                                                    task.priority === 'Medium' ? 'bg-orange-500' : 'bg-yellow-500'
+                                                                    }`} />
+                                                                <div>
+                                                                    <div className={`font-medium text-base ${isCompleted ? "line-through text-muted-foreground" : ""}`}>{task.title}</div>
+                                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                                        <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">
+                                                                            {formatTimeRange(s.scheduledTime, task.durationMinutes || 60)}
+                                                                        </span>
+                                                                        <span>•</span>
+                                                                        <span>{task.durationMinutes}m</span>
+                                                                        <span>•</span>
+                                                                        <span>{task.subject}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                {!isCompleted && (
+                                                                    <>
+                                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => window.location.href = `/study/mode/${task.id}`} title="Start">
+                                                                            <Play className="h-4 w-4" />
+                                                                        </Button>
+                                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={async () => {
+                                                                            if (!user) return
+                                                                            await unscheduleStudyTask(user.uid, s.id, task.id)
+                                                                            toast.success("Unscheduled")
+                                                                        }} title="Unschedule"><Filter className="h-4 w-4 rotate-180" /></Button>
+                                                                        <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white" onClick={async () => {
+                                                                            if (!user) return
+                                                                            await updateDoc(doc(db, "study_tasks", task.id), { status: "completed" })
+                                                                            await logStudyActivity(user.uid, task.id, "completed", "Task completed via list")
+                                                                            toast.success("Completed!")
+                                                                        }} title="Complete"><CheckCircle2 className="h-4 w-4" /></Button>
+                                                                    </>
+                                                                )}
+                                                                <Button size="sm" variant="destructive" className="h-8 px-2" onClick={async () => {
+                                                                    if (!user) return
+                                                                    if (confirm("Delete?")) {
+                                                                        await deleteStudyTask(user.uid, task.id)
+                                                                        toast.success("Deleted")
+                                                                    }
+                                                                }} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+                                                            </div>
+
+                                                            {/* POST-SPACER */}
+                                                            {
+                                                                dropIndicator?.id === s.id && dropIndicator.position === 'bottom' && (
+                                                                    <motion.div
+                                                                        initial={{ height: 0, opacity: 0 }}
+                                                                        animate={{ height: 60, opacity: 1 }}
+                                                                        exit={{ height: 0, opacity: 0 }}
+                                                                        className="mt-2 border-2 border-dashed border-primary/40 rounded-lg bg-primary/5 w-full"
+                                                                    />
+                                                                )
+                                                            }
+                                                        </motion.div>
+                                                    )
+                                                })}
+                                        </AnimatePresence>
                                     </div>
-                                )}
-                            </div>
+                                </TabsContent>
+                            </Tabs>
                         </div>
                     )}
                 </div>
@@ -759,11 +707,11 @@ export function StudyPlanner() {
                                 } catch (err) { }
                             }}
                         >
-                            {tasks.filter(t => t.status === "unscheduled").length > 0 ? (
+                            {tasks.filter((t: StudyTask) => t.status === "unscheduled").length > 0 ? (
                                 tasks
-                                    .filter(t => t.status === "unscheduled")
-                                    .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
-                                    .map((task, index, array) => (
+                                    .filter((t: StudyTask) => t.status === "unscheduled")
+                                    .sort((a: StudyTask, b: StudyTask) => (a.orderIndex || 0) - (b.orderIndex || 0))
+                                    .map((task: StudyTask, index: number, array: StudyTask[]) => (
                                         <div
                                             key={task.id}
                                             className="p-2 border rounded-md bg-card text-sm cursor-grab active:cursor-grabbing hover:bg-accent/50 relative group"
@@ -847,31 +795,22 @@ export function StudyPlanner() {
 
 // getDoc moved to top imports
 
-function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose: () => void, existingTasks: StudyTask[] }) {
+const AIPlanGenerator = memo(({ user, onClose, existingTasks, targetDate }: { user: any, onClose: () => void, existingTasks: StudyTask[], targetDate: string }) => {
     const [hours, setHours] = useState(2)
     const [preferences, setPreferences] = useState("")
-    const [days, setDays] = useState(1)
     const [loading, setLoading] = useState(false)
-
-    useEffect(() => {
-        // No explicit mode state needed, logic directly checks existingTasks.length
-    }, [existingTasks])
 
     const handleGenerate = async () => {
         if (!user) return
         setLoading(true)
 
         try {
-            // STRICT AI SCHEDULER LOGIC
-            // Case A: No tasks -> Prompt user to add tasks manually
             if (existingTasks.length === 0) {
                 toast.error("You don't have any study tasks yet. Please add tasks first so I can create a study plan.")
                 setLoading(false)
                 return
             }
 
-            // Case B: Tasks exist -> Schedule them
-            // We use the new scheduleUserTasks action
             const tasksForAI = existingTasks
                 .filter(t => t.status === "unscheduled")
                 .map(t => ({
@@ -883,30 +822,29 @@ function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose:
                     deadline: t.deadline ? (typeof t.deadline.toDate === 'function' ? t.deadline.toDate().toISOString() : new Date(t.deadline as any).toISOString()) : undefined
                 }))
 
-            // Pass preferences and days to the action
-            const result = await scheduleUserTasks(tasksForAI, hours, preferences, days)
+            const target = new Date(targetDate)
+            const offset = target.getTimezoneOffset()
+            const localDate = new Date(target.getTime() - (offset * 60 * 1000))
+            const startDateStr = localDate.toISOString().split('T')[0]
+
+            const result = await scheduleUserTasks(tasksForAI, hours, preferences, 1, startDateStr)
 
             if (result.error) {
                 toast.error(result.error)
                 return
             }
 
-            // Process Schedule Results
             const scheduleData = result.schedule
             const promises = []
 
-            // 1. Update Scheduled Tasks
             if (scheduleData.scheduled_tasks) {
                 for (const item of scheduleData.scheduled_tasks) {
                     promises.push(scheduleStudyTask(user.uid, item.task_id, new Date(`${item.scheduled_date}T${item.scheduled_time}`), item.scheduled_time))
                 }
             }
 
-            // 2. Log Unscheduled Reasons? (Optional, maybe just toast summary)
-
             await Promise.all(promises)
-
-            toast.success(`Scheduled ${scheduleData.scheduled_tasks?.length || 0} tasks!`)
+            toast.success(`Scheduled ${scheduleData.scheduled_tasks?.length || 0} tasks for ${targetDate}!`)
             onClose()
 
         } catch (e: any) {
@@ -916,7 +854,6 @@ function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose:
         }
     }
 
-    // Render logic based on Case A/B
     if (existingTasks.length === 0) {
         return (
             <div className="space-y-4 py-4">
@@ -933,25 +870,10 @@ function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose:
         <div className="space-y-4 py-4">
             <div className="p-4 bg-muted/20 rounded-lg mb-4">
                 <p className="font-medium text-sm mb-2">You have {existingTasks.length} total tasks.</p>
-                <p className="text-xs text-muted-foreground">The AI will attempt to reschedule ALL your tasks into an optimal plan, respecting your daily limits.</p>
+                <p className="text-xs text-muted-foreground">The AI will scale tasks into <strong>{targetDate}</strong>.</p>
             </div>
 
             <div className="space-y-4">
-                <div className="grid gap-2">
-                    <Label>Schedule Duration</Label>
-                    <Select value={days.toString()} onValueChange={(v) => setDays(parseInt(v))}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select duration" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="1">Next Day Only</SelectItem>
-                            <SelectItem value="3">Next 3 Days</SelectItem>
-                            <SelectItem value="7">Next Week</SelectItem>
-                            <SelectItem value="30">Next Month</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-
                 <div className="grid gap-2">
                     <Label>Daily Study Limit (Hours)</Label>
                     <div className="flex items-center gap-4">
@@ -980,8 +902,10 @@ function AIPlanGenerator({ user, onClose, existingTasks }: { user: any, onClose:
             </div>
 
             <Button onClick={handleGenerate} disabled={loading} className="w-full mt-4">
-                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Scheduling...</> : <><Sparkles className="mr-2 h-4 w-4" /> Schedule My Tasks</>}
+                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Scheduling...</> : <><Sparkles className="mr-2 h-4 w-4" /> Schedule for {targetDate}</>}
             </Button>
         </div>
     )
-}
+})
+
+AIPlanGenerator.displayName = "AIPlanGenerator"

@@ -89,7 +89,8 @@ export async function scheduleUserTasks(
   }[],
   hoursPerDay: number,
   preferences?: string,
-  daysToSchedule: number = 1
+  daysToSchedule: number = 1,
+  startDate?: string
 ) {
   const apiKey = process.env.GEMINI_API_KEY
 
@@ -105,13 +106,22 @@ export async function scheduleUserTasks(
     const model = getGeminiModel()
 
     // Calculate Date Range
-    const today = new Date()
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const startDateStr = tomorrow.toISOString().split('T')[0] // Format: YYYY-MM-DD
+    let startDateStr: string
+    let rangeStart: Date
+
+    if (startDate) {
+      startDateStr = startDate
+      rangeStart = new Date(startDate)
+    } else {
+      const today = new Date()
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      startDateStr = tomorrow.toISOString().split('T')[0] // Format: YYYY-MM-DD
+      rangeStart = tomorrow
+    }
 
     // Calculate End Date
-    const endDate = new Date(tomorrow)
+    const endDate = new Date(rangeStart)
     endDate.setDate(endDate.getDate() + (daysToSchedule - 1)) // If 1 day, end = start
     const endDateStr = endDate.toISOString().split('T')[0]
 

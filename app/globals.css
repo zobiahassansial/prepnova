@@ -150,3 +150,4 @@
 .shake {
   animation: shake 0.3s ease-in-out;
 }
+.rdp-nav_button svg { color: white !important; stroke: white !important; }
