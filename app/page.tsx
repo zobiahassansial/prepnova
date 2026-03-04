@@ -26,7 +26,7 @@ export default function Home() {
                 </div>
                 
                 <div className="space-y-6">
-                    <h1 className="text-4xl font-bold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl text-foreground">
+                    <h1 className="text-4xl font-bold tracking-tight sm:text-6xl md:text-7xl lg:text-7xl text-foreground">
                     Academic performance <br />
                     <span className="text-primary">engineered by AI.</span>
                     </h1>
@@ -269,7 +269,7 @@ export default function Home() {
             </div>
         </section>
 
-        {/* ================= PRICING SECTION (Cards) ================= */}
+{/* ================= PRICING SECTION (Cards) ================= */}
         <section id="pricing" className="w-full py-32 bg-background">
           <div className="container px-4 md:px-6 mx-auto">
             <div className="flex flex-col items-center justify-center space-y-4 text-center mb-20">
@@ -279,25 +279,30 @@ export default function Home() {
               </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto items-start">
+            {/* Grid for cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
 
               {/* Free Plan */}
-              <Card className="flex flex-col border-border/60 shadow-none hover:border-border transition-colors">
-                <CardHeader>
-                  <CardTitle className="text-xl">Free</CardTitle>
-                  <CardDescription>For casual learners</CardDescription>
-                  <div className="text-4xl font-bold mt-4">$0<span className="text-base font-normal text-muted-foreground">/mo</span></div>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <ul className="space-y-4 text-sm">
-                    {["3 Resume Generations", "5 AI Summaries / month", "3 Flashcard Decks", "Basic Study Planner"].map((item) => (
-                      <li key={item} className="flex items-center text-muted-foreground">
-                        <CheckCircle2 className="mr-3 h-4 w-4 text-green-500" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
+              <Card className="flex flex-col h-full border-border/60 shadow-none hover:border-border transition-colors">
+                {/* Is div mein flex-1 lagaya hai takay ye extra space fill kare */}
+                <div className="flex-1">
+                  <CardHeader>
+                    <CardTitle className="text-xl">Free</CardTitle>
+                    <CardDescription>For casual learners</CardDescription>
+                    <div className="text-4xl font-bold mt-4">$0<span className="text-base font-normal text-muted-foreground">/mo</span></div>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-4 text-sm">
+                      {["3 Resume Generations", "5 AI Summaries / month", "3 Flashcard Decks", "Basic Study Planner"].map((item) => (
+                        <li key={item} className="flex items-center text-muted-foreground">
+                          <CheckCircle2 className="mr-3 h-4 w-4 text-green-500" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </div>
+                {/* Button hamesha bottom par rahega */}
                 <div className="p-6 pt-0">
                   <Link href="/signup">
                     <Button variant="outline" className="w-full rounded-full hover:bg-muted/80">Start for Free</Button>
@@ -306,22 +311,24 @@ export default function Home() {
               </Card>
 
               {/* Standard Plan */}
-              <Card className="flex flex-col border-blue-200 dark:border-blue-800 shadow-sm hover:shadow-md transition-all relative">
-                <CardHeader>
-                  <CardTitle className="text-xl text-blue-600 dark:text-blue-400">Standard</CardTitle>
-                  <CardDescription>For serious students</CardDescription>
-                  <div className="text-4xl font-bold mt-4">$7<span className="text-base font-normal text-muted-foreground">/mo</span></div>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <ul className="space-y-4 text-sm">
-                    {["10 Resume Generations", "15 AI Summaries / month", "Full Study Planner", "Flashcards AI Generation"].map((item) => (
-                      <li key={item} className="flex items-center">
-                        <CheckCircle2 className="mr-3 h-4 w-4 text-blue-500" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
+              <Card className="flex flex-col h-full border-blue-200 dark:border-blue-800 shadow-sm hover:shadow-md transition-all relative">
+                <div className="flex-1">
+                  <CardHeader>
+                    <CardTitle className="text-xl text-blue-600 dark:text-blue-400">Standard</CardTitle>
+                    <CardDescription>For serious students</CardDescription>
+                    <div className="text-4xl font-bold mt-4">$7<span className="text-base font-normal text-muted-foreground">/mo</span></div>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-4 text-sm">
+                      {["10 Resume Generations", "15 AI Summaries / month", "Full Study Planner", "Flashcards AI Generation"].map((item) => (
+                        <li key={item} className="flex items-center">
+                          <CheckCircle2 className="mr-3 h-4 w-4 text-blue-500" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </div>
                 <div className="p-6 pt-0">
                   <Link href="/signup">
                     <Button className="w-full bg-blue-600 hover:bg-blue-700 rounded-full">Upgrade to Standard</Button>
@@ -330,25 +337,27 @@ export default function Home() {
               </Card>
 
               {/* Pro Plan (Highlighted) */}
-              <Card className="flex flex-col border-primary shadow-2xl scale-105 z-10 relative bg-background">
+              <Card className="flex flex-col h-full border-primary shadow-2xl scale-105 z-10 relative bg-background">
                 <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-4 py-1 text-xs font-bold rounded-bl-xl shadow-sm">
                     POPULAR
                 </div>
-                <CardHeader>
-                  <CardTitle className="text-2xl text-primary font-bold">Pro</CardTitle>
-                  <CardDescription>Unlock full power</CardDescription>
-                  <div className="text-4xl font-bold mt-4">$15<span className="text-base font-normal text-muted-foreground">/mo</span></div>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <ul className="space-y-4 text-sm font-medium">
-                    {["20 Resume Generations", "25 AI Summaries / month", "Interview Prep Access", "All AI features", "Priority Support"].map((item) => (
-                      <li key={item} className="flex items-center">
-                        <CheckCircle2 className="mr-3 h-5 w-5 text-primary fill-primary/10" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
+                <div className="flex-1">
+                  <CardHeader>
+                    <CardTitle className="text-2xl text-primary font-bold">Pro</CardTitle>
+                    <CardDescription>Unlock full power</CardDescription>
+                    <div className="text-4xl font-bold mt-4">$15<span className="text-base font-normal text-muted-foreground">/mo</span></div>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-4 text-sm font-medium">
+                      {["20 Resume Generations", "25 AI Summaries / month", "Interview Prep Access", "All AI features", "Priority Support"].map((item) => (
+                        <li key={item} className="flex items-center">
+                          <CheckCircle2 className="mr-3 h-5 w-5 text-primary fill-primary/10" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </div>
                 <div className="p-6 pt-0">
                   <Link href="/signup">
                     <Button className="w-full rounded-full text-base h-12 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all active:scale-95">
@@ -359,22 +368,24 @@ export default function Home() {
               </Card>
 
               {/* Lifetime Plan */}
-              <Card className="flex flex-col border-yellow-400/30 shadow-none bg-yellow-50/30 dark:bg-yellow-900/10 hover:border-yellow-400/50 transition-colors">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center gap-2">Lifetime <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /></CardTitle>
-                  <CardDescription>Pay once, own forever</CardDescription>
-                  <div className="text-4xl font-bold mt-4">$199<span className="text-base font-normal text-muted-foreground">/once</span></div>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <ul className="space-y-4 text-sm">
-                    {["Unlimited Resumes", "Unlimited Summaries", "Unlimited Flashcards", "Unlimited Study Planner", "Unlimited Interview Prep", "Future Updates"].map((item) => (
-                      <li key={item} className="flex items-center font-medium">
-                        <CheckCircle2 className="mr-3 h-4 w-4 text-yellow-600" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
+              <Card className="flex flex-col h-full border-yellow-400/30 shadow-none bg-yellow-50/30 dark:bg-yellow-900/10 hover:border-yellow-400/50 transition-colors">
+                <div className="flex-1">
+                  <CardHeader>
+                    <CardTitle className="text-xl flex items-center gap-2">Lifetime <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /></CardTitle>
+                    <CardDescription>Pay once, own forever</CardDescription>
+                    <div className="text-4xl font-bold mt-4">$199<span className="text-base font-normal text-muted-foreground">/once</span></div>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-4 text-sm">
+                      {["Unlimited Resumes", "Unlimited Summaries", "Unlimited Flashcards", "Unlimited Study Planner", "Unlimited Interview Prep", "Future Updates"].map((item) => (
+                        <li key={item} className="flex items-center font-medium">
+                          <CheckCircle2 className="mr-3 h-4 w-4 text-yellow-600" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </div>
                 <div className="p-6 pt-0">
                   <Link href="/signup">
                     <Button variant="outline" className="w-full border-yellow-500/50 text-yellow-700 hover:bg-yellow-100 rounded-full">Get Lifetime Access</Button>
@@ -385,7 +396,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-
 {/* ================= FAQ SECTION (Premium Grid) ================= */}
         <section className="py-24 bg-muted/10 relative overflow-hidden">
             
