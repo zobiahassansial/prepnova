@@ -26,10 +26,12 @@ export async function GET(req: Request) {
         return NextResponse.json({
             available: false,
             suggestions: [
+                `${username}${Math.floor(Math.random() * 100)}`,
                 `${username}_01`,
+                `${username.replace(/\d+$/, '')}${Math.floor(Math.random() * 1000)}`,
                 `${username}_dev`,
-                `${username}${Math.floor(Math.random() * 1000)}`
-            ]
+                `${username}123`
+            ].filter((v, i, a) => a.indexOf(v) === i && v !== username).slice(0, 5)
         })
     } catch (error) {
         console.error("check-username error:", error)
