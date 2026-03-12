@@ -1,6 +1,5 @@
-import { collection, query, where, getDocs, limit } from "firebase/firestore"
-import { db } from "@/lib/firebase"
 import { NextResponse } from "next/server"
+import { adminDb } from "@/lib/firebase-admin"
 
 export async function GET(req: Request) {
     try {
@@ -11,13 +10,11 @@ export async function GET(req: Request) {
             return NextResponse.json({ available: false })
         }
 
-        const q = query(
-            collection(db, "users"),
-            where("username", "==", username),
-            limit(1)
-        )
-
-        const snap = await getDocs(q)
+        const snap = await adminDb
+            .collection("users")
+            .where("username", "==", username)
+            .limit(1)
+            .get()
 
         if (snap.empty) {
             return NextResponse.json({ available: true })

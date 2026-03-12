@@ -73,21 +73,19 @@ export default function SignupPage() {
     }, [watchUsername])
 
     async function checkUsername(username: string) {
+        if (!username || username.length < 3) return
         try {
-            const res = await fetch(`/api/check-username?username=${username}`)
+            const res = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`)
             const data = await res.json()
 
             if (data.available === true) {
                 setUsernameAvailable(true)
                 setUsernameSuggestions([])
-                form.clearErrors("username")
+                form.clearErrors("username")  // ← clears the "taken" manual error
             } else {
                 setUsernameAvailable(false)
                 setUsernameSuggestions(data.suggestions || [])
-                form.setError("username", {
-                    type: "manual",
-                    message: "Username is already taken",
-                })
+                form.setError("username", { type: "manual", message: "Username is already taken" })
             }
         } catch (error) {
             console.error("Username check failed:", error)
@@ -286,30 +284,52 @@ export default function SignupPage() {
                                 <p className="text-sm text-red-500">{form.formState.errors.name.message}</p>
                             )}
                         </div>
-
                         {/* Username Field */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Username</label>
                             <div className="relative">
                                 <input
                                     {...form.register("username")}
-                                    className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 ${usernameAvailable === true ? "border-green-500 ring-green-500" :
-                                        usernameAvailable === false ? "border-red-500 ring-red-500" : "border-input"
+                                    onChange={(e) => {
+                                        form.setValue("username", e.target.value)
+                                        // Reset states on every keystroke so stale UI clears immediately
+                                        setUsernameAvailable(null)
+                                        setUsernameSuggestions([])
+                                    }}
+                                    className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm pr-10
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+                disabled:opacity-50 transition-colors
+                ${usernameAvailable === true
+                                            ? "border-green-500 focus-visible:ring-green-500"
+                                            : usernameAvailable === false
+                                                ? "border-red-500 focus-visible:ring-red-500"
+                                                : "border-input focus-visible:ring-ring"
                                         }`}
                                     placeholder="johndoe_123"
                                     disabled={otpSent && !phoneVerified}
                                 />
-                                {usernameAvailable === true && <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />}
-                                {usernameAvailable === false && <AlertCircle className="absolute right-3 top-2.5 h-5 w-5 text-red-500" />}
+                                {usernameAvailable === true && (
+                                    <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
+                                )}
+                                {usernameAvailable === false && (
+                                    <AlertCircle className="absolute right-3 top-2.5 h-5 w-5 text-red-500" />
+                                )}
                             </div>
 
-                            {usernameAvailable === true && (
-                                <p className="text-xs text-green-600 font-medium">Username available — you can use this.</p>
+                            {/* Only show when username is long enough and checked */}
+                            {watchUsername.length >= 3 && usernameAvailable === true && (
+                                <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Username is available
+                                </p>
                             )}
 
-                            {usernameAvailable === false && (
+                            {watchUsername.length >= 3 && usernameAvailable === false && (
                                 <div className="space-y-2">
-                                    <p className="text-xs text-red-600 font-medium">Username is already taken</p>
+                                    <p className="text-xs text-red-600 font-medium flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3" />
+                                        Username is already taken
+                                    </p>
                                     {usernameSuggestions.length > 0 && (
                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-lg">
                                             <p className="mb-1 font-semibold">Try these instead:</p>
@@ -317,9 +337,12 @@ export default function SignupPage() {
                                                 {usernameSuggestions.map(s => (
                                                     <span
                                                         key={s}
-                                                        className="px-2 py-1 bg-background border rounded-md cursor-pointer hover:border-primary hover:text-primary transition-colors"
+                                                        className="px-2 py-1 bg-background border rounded-md cursor-pointer
+                                    hover:border-primary hover:text-primary transition-colors"
                                                         onClick={() => {
                                                             form.setValue("username", s)
+                                                            // Trigger check for the suggestion immediately
+                                                            checkUsername(s.toLowerCase())
                                                         }}
                                                     >
                                                         {s}
@@ -330,8 +353,10 @@ export default function SignupPage() {
                                     )}
                                 </div>
                             )}
-                            {form.formState.errors.username && !usernameAvailable && (
-                                <p className="text-sm text-red-500">{form.formState.errors.username.message}</p>
+
+                            {/* Only show zod format errors (min length, invalid chars), NOT the "taken" error */}
+                            {form.formState.errors.username?.type !== "manual" && watchUsername.length > 0 && (
+                                <p className="text-sm text-red-500">{form.formState.errors.username?.message}</p>
                             )}
                         </div>
 

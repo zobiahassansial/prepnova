@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
@@ -22,7 +22,7 @@ const LoginSchema = z.object({
 import { useSession } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
 
-export default function LoginPage() {
+function LoginContent() {
     const { status } = useSession()
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -267,5 +267,17 @@ export default function LoginPage() {
                 </CardFooter>
             </Card>
         </div>
+    )
+
+}
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-muted/50">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        }>
+            <LoginContent />
+        </Suspense>
     )
 }
