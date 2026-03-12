@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
@@ -10,20 +10,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { toast } from "sonner"
 import { Brain, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
-import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth"
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth"
 import { doc, setDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
-import { PhoneInput } from "react-international-phone"
-import "react-international-phone/style.css"
 import { useSession } from "next-auth/react"
 
 const SignupSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters"),
     username: z.string().min(3, "Username must be at least 3 characters").regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
     email: z.string().email("Invalid email address"),
-    phone: z.string().min(10, "Invalid phone number"),
     password: z.string().min(6, "Password must be at least 6 characters"),
-    otp: z.string().optional()
 })
 
 export default function SignupPage() {
@@ -31,11 +27,6 @@ export default function SignupPage() {
     const [loading, setLoading] = useState(false)
     const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
     const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([])
-    const [otpSent, setOtpSent] = useState(false)
-    const [verifyingOtp, setVerifyingOtp] = useState(false)
-    const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null)
-    const [phoneVerified, setPhoneVerified] = useState(false)
-    const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null)
     const router = useRouter()
 
     const form = useForm<z.infer<typeof SignupSchema>>({
@@ -44,9 +35,7 @@ export default function SignupPage() {
             name: "",
             username: "",
             email: "",
-            phone: "",
             password: "",
-            otp: ""
         },
     })
 
@@ -81,7 +70,7 @@ export default function SignupPage() {
             if (data.available === true) {
                 setUsernameAvailable(true)
                 setUsernameSuggestions([])
-                form.clearErrors("username")  // ← clears the "taken" manual error
+                form.clearErrors("username")
             } else {
                 setUsernameAvailable(false)
                 setUsernameSuggestions(data.suggestions || [])
@@ -92,105 +81,7 @@ export default function SignupPage() {
         }
     }
 
-    const setupRecaptcha = () => {
-        // Agar existing verifier hai, toh pehle usay clear karein taakay duplicate na banay
-        if (recaptchaVerifierRef.current) {
-            recaptchaVerifierRef.current.clear();
-            recaptchaVerifierRef.current = null;
-        }
-
-        try {
-            const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                'size': 'invisible',
-                'callback': (response: any) => {
-                    console.log("Recaptcha token generated");
-                },
-                'expired-callback': () => {
-                    toast.error("reCAPTCHA expired. Please try again.");
-                    // Expire hone par bhi clear kar dein
-                    if (recaptchaVerifierRef.current) {
-                        recaptchaVerifierRef.current.clear();
-                        recaptchaVerifierRef.current = null;
-                    }
-                }
-            });
-
-            recaptchaVerifierRef.current = verifier;
-            verifier.render();
-            return verifier;
-
-        } catch (error) {
-            console.error("Recaptcha setup error:", error);
-            return null;
-        }
-    }
-
-    async function sendOTP() {
-        const phone = form.getValues("phone")
-        if (!phone || phone.length < 10) {
-            toast.error("Please enter a valid phone number.")
-            return
-        }
-
-        setLoading(true)
-        const appVerifier = setupRecaptcha()
-
-        if (!appVerifier) {
-            setLoading(false)
-            toast.error("Failed to initialize reCAPTCHA verifier.")
-            return
-        }
-
-        try {
-            const formattedPhone = phone.startsWith("+") ? phone : "+" + phone
-            const result = await signInWithPhoneNumber(auth, formattedPhone, appVerifier)
-            setConfirmationResult(result)
-            setOtpSent(true)
-            toast.success("OTP sent to your phone.")
-        } catch (error: any) {
-            console.error("Error sending OTP:", error)
-            toast.error(error.message || "Failed to send OTP. Please try again.")
-            // Reset reCAPTCHA if it fails
-            if (recaptchaVerifierRef.current) {
-                recaptchaVerifierRef.current.clear();
-                recaptchaVerifierRef.current = null;
-            }
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    async function verifyOTP() {
-        const otp = form.getValues("otp")
-        if (!otp || otp.length < 6) {
-            toast.error("Please enter the 6-digit OTP.")
-            return
-        }
-
-        if (!confirmationResult) {
-            toast.error("OTP not sent yet.")
-            return
-        }
-
-        setVerifyingOtp(true)
-        try {
-            await confirmationResult.confirm(otp)
-            setPhoneVerified(true)
-            toast.success("Phone number verified successfully!")
-        } catch (error: any) {
-            console.error("OTP verification failed:", error)
-            toast.error("Invalid OTP. Please try again.")
-        } finally {
-            setVerifyingOtp(false)
-        }
-    }
-
     async function onSubmit(values: z.infer<typeof SignupSchema>) {
-        if (!phoneVerified) {
-            toast.error("Please verify your phone number first.")
-            return
-        }
-
         if (usernameAvailable === false) {
             toast.error("Please choose an available username.")
             return
@@ -198,30 +89,23 @@ export default function SignupPage() {
 
         setLoading(true)
         try {
-            // 1. Create Firebase Auth User (This might link the phone auth if handled correctly, 
-            // but for this flow we follow the requested structure: create with email/pass)
             const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password)
             const user = userCredential.user
 
-            // 2. Send Verification Email
             await sendEmailVerification(user, {
                 url: `${window.location.origin}/login`,
                 handleCodeInApp: false,
             })
 
-            // 3. Update Display Name
             await updateProfile(user, {
                 displayName: values.name
             })
 
-            // 4. Create Firestore User Profile
             await setDoc(doc(db, "users", user.uid), {
                 uid: user.uid,
                 name: values.name,
                 username: values.username.toLowerCase(),
                 email: values.email,
-                phoneNumber: values.phone,
-                phoneVerified: true,
                 emailVerified: false,
                 onboardingCompleted: false,
                 createdAt: new Date(),
@@ -278,12 +162,13 @@ export default function SignupPage() {
                                 {...form.register("name")}
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
                                 placeholder="John Doe"
-                                disabled={otpSent && !phoneVerified}
+                                disabled={loading}
                             />
                             {form.formState.errors.name && (
                                 <p className="text-sm text-red-500">{form.formState.errors.name.message}</p>
                             )}
                         </div>
+                        
                         {/* Username Field */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Username</label>
@@ -292,21 +177,20 @@ export default function SignupPage() {
                                     {...form.register("username")}
                                     onChange={(e) => {
                                         form.setValue("username", e.target.value)
-                                        // Reset states on every keystroke so stale UI clears immediately
                                         setUsernameAvailable(null)
                                         setUsernameSuggestions([])
                                     }}
                                     className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm pr-10
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
-                disabled:opacity-50 transition-colors
-                ${usernameAvailable === true
+                                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+                                        disabled:opacity-50 transition-colors
+                                        ${usernameAvailable === true
                                             ? "border-green-500 focus-visible:ring-green-500"
                                             : usernameAvailable === false
                                                 ? "border-red-500 focus-visible:ring-red-500"
                                                 : "border-input focus-visible:ring-ring"
                                         }`}
                                     placeholder="johndoe_123"
-                                    disabled={otpSent && !phoneVerified}
+                                    disabled={loading}
                                 />
                                 {usernameAvailable === true && (
                                     <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
@@ -338,10 +222,9 @@ export default function SignupPage() {
                                                     <span
                                                         key={s}
                                                         className="px-2 py-1 bg-background border rounded-md cursor-pointer
-                                    hover:border-primary hover:text-primary transition-colors"
+                                                            hover:border-primary hover:text-primary transition-colors"
                                                         onClick={() => {
                                                             form.setValue("username", s)
-                                                            // Trigger check for the suggestion immediately
                                                             checkUsername(s.toLowerCase())
                                                         }}
                                                     >
@@ -354,7 +237,6 @@ export default function SignupPage() {
                                 </div>
                             )}
 
-                            {/* Only show zod format errors (min length, invalid chars), NOT the "taken" error */}
                             {form.formState.errors.username?.type !== "manual" && watchUsername.length > 0 && (
                                 <p className="text-sm text-red-500">{form.formState.errors.username?.message}</p>
                             )}
@@ -368,7 +250,7 @@ export default function SignupPage() {
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
                                 placeholder="student@example.com"
                                 type="email"
-                                disabled={otpSent && !phoneVerified}
+                                disabled={loading}
                             />
                             {form.formState.errors.email && (
                                 <p className="text-sm text-red-500">{form.formState.errors.email.message}</p>
@@ -383,83 +265,17 @@ export default function SignupPage() {
                                 type="password"
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
                                 placeholder="••••••••"
-                                disabled={otpSent && !phoneVerified}
+                                disabled={loading}
                             />
                             {form.formState.errors.password && (
                                 <p className="text-sm text-red-500">{form.formState.errors.password.message}</p>
                             )}
                         </div>
 
-                        {/* Phone Number Section */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Phone Number</label>
-                            {!otpSent && !phoneVerified ? (
-                                <div className="space-y-3">
-                                    <PhoneInput
-                                        defaultCountry="us"
-                                        value={form.watch("phone")}
-                                        onChange={(phone) => form.setValue("phone", phone)}
-                                        className="w-full"
-                                        inputClassName="!w-full !h-10 !text-sm !rounded-md !border-input !bg-background"
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="w-full"
-                                        onClick={sendOTP}
-                                        disabled={loading || !form.watch("phone")}
-                                    >
-                                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Send OTP
-                                    </Button>
-                                </div>
-                            ) : phoneVerified ? (
-                                <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md">
-                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                    <span className="text-sm text-green-700">{form.getValues("phone")} (Verified)</span>
-                                </div>
-                            ) : otpSent && (
-                                <div className="space-y-3">
-                                    <p className="text-xs text-blue-600 font-medium bg-blue-50 p-2 rounded">OTP sent to your phone.</p>
-                                    <div className="space-y-1">
-                                        <input
-                                            {...form.register("otp")}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                            placeholder="Enter 6-digit OTP"
-                                            maxLength={6}
-                                        />
-                                        <Button
-                                            type="button"
-                                            className="w-full"
-                                            onClick={verifyOTP}
-                                            disabled={verifyingOtp}
-                                        >
-                                            {verifyingOtp && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Verify OTP
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="w-full text-xs"
-                                            onClick={() => {
-                                                setOtpSent(false)
-                                                setConfirmationResult(null)
-                                            }}
-                                        >
-                                            Change Number
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <div id="recaptcha-container"></div>
-
                         <Button
                             className="w-full mt-6"
                             type="submit"
-                            disabled={loading || !phoneVerified}
+                            disabled={loading}
                         >
                             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Create Account
