@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState, useEffect, useMemo, useCallback, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -259,6 +259,13 @@ export function StudyPlanner() {
             const taskRef = doc(db, "study_tasks", selectedTask.id)
             await updateDoc(taskRef, { status: "completed" })
             await logStudyActivity(user.uid, selectedTask.id, "completed", `Task completed: ${selectedTask.title}`)
+            // Log to activityLog for dashboard feed
+            await addDoc(collection(db, "users", user.uid, "activityLog"), {
+                type: "task_complete",
+                description: `Completed: "${selectedTask.title}"`,
+                icon: "✅",
+                timestamp: Timestamp.now(),
+            })
             toast.success("Task completed!")
             setDetailOpen(false)
         } catch (e) {

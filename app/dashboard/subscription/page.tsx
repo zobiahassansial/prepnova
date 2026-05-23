@@ -1,7 +1,7 @@
 "use client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Check, CheckCircle2, Zap, Star, ShieldCheck } from "lucide-react" // Added icons
+import { Check, CheckCircle2, Zap, Star, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/components/providers/auth-provider"
 import { Badge } from "@/components/ui/badge"
@@ -20,10 +20,13 @@ export default function SubscriptionPage() {
                 <p className="text-xl text-muted-foreground">Unlock the full potential of your study, career, and interview prep.</p>
             </div>
 
-            {/* Added 'group' class to the grid container */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 group">
+
                 {/* Free Plan */}
-                <Card className="flex flex-col border-muted relative transition-all duration-300 ease-in-out group-hover:scale-[0.96] group-hover:opacity-50 group-hover:blur-[1px] hover:!scale-105 hover:!opacity-100 hover:!blur-none hover:z-50 hover:shadow-2xl">
+                <Card className="flex flex-col border-muted relative
+                    transition-all duration-300 ease-in-out
+                    group-hover:scale-95 group-hover:opacity-60
+                    hover:!scale-105 hover:!opacity-100 hover:!z-50 hover:shadow-2xl">
                     <CardHeader>
                         <CardTitle className="text-xl">Free</CardTitle>
                         <CardDescription>Essential basics</CardDescription>
@@ -46,7 +49,10 @@ export default function SubscriptionPage() {
                 </Card>
 
                 {/* Standard Plan */}
-                <Card className="flex flex-col border-blue-200 dark:border-blue-800 relative hover:border-blue-500/50 transition-all duration-300 ease-in-out group-hover:scale-[0.96] group-hover:opacity-50 group-hover:blur-[1px] hover:!scale-105 hover:!opacity-100 hover:!blur-none hover:z-50 hover:shadow-2xl">
+                <Card className="flex flex-col border-blue-200 dark:border-blue-800 relative
+                    transition-all duration-300 ease-in-out
+                    group-hover:scale-95 group-hover:opacity-60
+                    hover:!scale-105 hover:!opacity-100 hover:!z-50 hover:shadow-2xl hover:border-blue-500/50">
                     <CardHeader>
                         <CardTitle className="text-xl text-blue-600 dark:text-blue-400">Standard</CardTitle>
                         <CardDescription>For serious students</CardDescription>
@@ -68,8 +74,11 @@ export default function SubscriptionPage() {
                     </CardFooter>
                 </Card>
 
-                {/* Pro Plan */}
-                <Card className="flex flex-col border-primary shadow-lg relative transform scale-105 z-10 transition-all duration-300 ease-in-out group-hover:!scale-[0.96] group-hover:opacity-50 group-hover:blur-[1px] hover:!scale-110 hover:!opacity-100 hover:!blur-none hover:!z-50 hover:shadow-2xl">
+                {/* Pro Plan — starts elevated, pops out more on hover */}
+                <Card className="flex flex-col border-primary shadow-lg relative transform scale-105 z-10
+                    transition-all duration-300 ease-in-out
+                    group-hover:!scale-95 group-hover:opacity-60
+                    hover:!scale-110 hover:!opacity-100 hover:!z-50 hover:shadow-2xl">
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                         <Badge className="bg-primary text-primary-foreground px-3 py-1">MOST POPULAR</Badge>
                     </div>
@@ -96,7 +105,10 @@ export default function SubscriptionPage() {
                 </Card>
 
                 {/* Lifetime Plan */}
-                <Card className="flex flex-col border-orange-500/50 bg-orange-50/50 dark:bg-orange-950/10 relative transition-all duration-300 ease-in-out group-hover:scale-[0.96] group-hover:opacity-50 group-hover:blur-[1px] hover:!scale-105 hover:!opacity-100 hover:!blur-none hover:z-50 hover:shadow-2xl">
+                <Card className="flex flex-col border-orange-500/50 bg-orange-50/50 dark:bg-orange-950/10 relative
+                    transition-all duration-300 ease-in-out
+                    group-hover:scale-95 group-hover:opacity-60
+                    hover:!scale-105 hover:!opacity-100 hover:!z-50 hover:shadow-2xl">
                     <div className="absolute top-0 right-0 bg-orange-500 text-white px-3 py-1 text-xs font-bold rounded-bl-lg">
                         BEST VALUE
                     </div>
@@ -121,6 +133,7 @@ export default function SubscriptionPage() {
                         <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white" onClick={() => handleUpgrade("Lifetime")}>Buy Lifetime</Button>
                     </CardFooter>
                 </Card>
+
             </div>
 
             <div className="bg-muted p-8 rounded-lg text-center max-w-3xl mx-auto">

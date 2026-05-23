@@ -10,7 +10,7 @@ export interface Flashcard {
 }
 
 export interface Deck {
-  id: string;
+  id?: string;
   title: string;
   sourceFileId?: string;
   cards: Flashcard[];

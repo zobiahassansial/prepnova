@@ -198,22 +198,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                             className="w-full min-h-[150px] pr-8"
                         />
 
-                        {/* REMOVED TONE SELECTOR - SINGLE SOURCE OF TRUTH */}
-                        {/* <div className="mt-2 flex items-center gap-4 text-sm">
-                            <span className="font-medium">Tone:</span>
-                             {["professional", "formal", "minimal"].map((tone) => (
-                                <label key={tone} className="flex items-center gap-1 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="coverTone"
-                                        checked={data.coverLetterTone === tone || (!data.coverLetterTone && tone === "professional")} // Default to professional
-                                        onChange={() => onChange({ ...data, coverLetterTone: tone as any })}
-                                        className="text-primary focus:ring-primary"
-                                    />
-                                    <span className="capitalize">{tone}</span>
-                                </label>
-                            ))}
-                        </div> */}
+            
                         <div className="absolute top-2 right-2 flex gap-2">
                             <Button
                                 variant="ghost"

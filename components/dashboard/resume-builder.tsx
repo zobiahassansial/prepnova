@@ -139,10 +139,10 @@ export function ResumeBuilder() {
         }
 
         try {
-            // Save to root "resumes" collection to match dashboard query pattern
-            await addDoc(collection(db, "resumes"), {
+            // Save to users/{uid}/resumes subcollection (dashboard onSnapshot reads this)
+            await addDoc(collection(db, "users", user.uid, "resumes"), {
                 ...resumeData,
-                userId: user.uid, // Ensure userId is explicit
+                userId: user.uid,
                 updatedAt: Timestamp.now(),
                 createdAt: Timestamp.now()
             })
@@ -153,10 +153,19 @@ export function ResumeBuilder() {
             // 3. Log Activity
             await logActivity(user.uid, "resume_created", { title: resumeData.title })
 
-            toast.success("Resume saved successfully")
-        } catch (error) {
-            console.error(error)
-            toast.error("Failed to save resume")
+            // 4. Log to activityLog for dashboard feed
+            try {
+                await addDoc(collection(db, "users", user.uid, "activityLog"), {
+                    type: "resume_saved",
+                    description: `Saved resume: "${resumeData.title}"`,
+                    icon: "📄",
+                    timestamp: Timestamp.now(),
+                })
+            } catch { /* non-critical */ }
+
+            toast.success("Resume saved successfully!")
+        } catch (error: any) {
+            toast.error("Failed to save resume: " + (error.message || "Unknown error"))
         } finally {
             setLoading(false)
         }
@@ -177,7 +186,14 @@ export function ResumeBuilder() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-6rem)]">
-            <UpgradeModal open={showUpgrade} onOpenChange={setShowUpgrade} featureName="Resume Generation" />
+            {showUpgrade && (
+                <UpgradeModal
+                    feature="Resume Generation"
+                    description="You've reached your resume limit for this plan. Upgrade to create more resumes."
+                    requiredPlan="standard"
+                    onClose={() => setShowUpgrade(false)}
+                />
+            )}
             {/* Toolbar */}
             <div className="flex items-center justify-between border-b pb-4 mb-4 bg-background z-10">
                 <div className="flex items-center gap-2">
