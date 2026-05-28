@@ -64,6 +64,7 @@ export interface ResumeData {
     coverLetter?: string
     coverTemplate?: string
     resumeTone?: "professional" | "formal" | "minimal"
+    customSections?: Array<{ id: string; title: string; content: string }>
 
     createdAt?: any
     updatedAt?: any

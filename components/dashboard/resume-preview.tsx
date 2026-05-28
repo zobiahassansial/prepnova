@@ -636,6 +636,14 @@ export function ResumePreview({ data, onPageCountChange }: ResumePreviewProps) {
                                                             </p>
                                                         </section>
                                                     )}
+
+                                                    {/* Custom Sections */}
+                                                    {(data as any).customSections?.filter((s: any) => s.title && s.content).map((section: any) => (
+                                                        <section key={section.id}>
+                                                            <h2 className="text-xs font-bold uppercase tracking-widest border-b border-black pb-1 mb-4">{section.title}</h2>
+                                                            <p className="text-sm whitespace-pre-wrap">{section.content}</p>
+                                                        </section>
+                                                    ))}
                                                 </div>
                                             </div>
                                         )

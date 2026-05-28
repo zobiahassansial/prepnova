@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore"
 import {
     updateProfile, updatePassword, reauthenticateWithCredential,
-    EmailAuthProvider, deleteUser as firebaseDeleteUser
+    EmailAuthProvider, deleteUser as firebaseDeleteUser, sendPasswordResetEmail
 } from "firebase/auth"
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll, getMetadata } from "firebase/storage"
 import { db, auth, storage } from "@/lib/firebase"
@@ -78,6 +78,14 @@ export function SettingsForm() {
     const [photoProgress, setPhotoProgress] = useState(0)
     const [photoUploading, setPhotoUploading] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const [resetEmailSent, setResetEmailSent] = useState(false)
+    const [resetEmailError, setResetEmailError] = useState('')
+    const [showChangePassword, setShowChangePassword] = useState(false)
+    const [currentPassword, setCurrentPassword] = useState('')
+    const [newPassword, setNewPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
+    const [passwordMsg, setPasswordMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
+    const [passwordLoading, setPasswordLoading] = useState(false)
 
     // ── Effects ───────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -248,6 +256,58 @@ export function SettingsForm() {
             setLoading(false)
         }
     }, [user, passwords])
+
+    // ── Send Reset Email ──────────────────────────────────────────────────────
+    const handleSendResetEmail = useCallback(async () => {
+        const currentUser = auth.currentUser
+        if (!currentUser?.email) return
+        setResetEmailError('')
+        setResetEmailSent(false)
+        setPasswordMsg(null)
+        try {
+            await sendPasswordResetEmail(auth, currentUser.email)
+            setPasswordMsg({ type: 'success', text: `Password reset email sent to ${currentUser.email}` })
+            setResetEmailSent(true)
+            setTimeout(() => { setResetEmailSent(false); setPasswordMsg(null) }, 5000)
+        } catch (err: unknown) {
+            setPasswordMsg({ type: 'error', text: 'Failed to send reset email. Please try again.' })
+        }
+    }, [])
+
+    // ── Change Password ───────────────────────────────────────────────────────
+    const handleChangePassword = useCallback(async () => {
+        setPasswordMsg(null)
+        if (newPassword !== confirmPassword) {
+            setPasswordMsg({ type: 'error', text: 'New passwords do not match.' })
+            return
+        }
+        if (newPassword.length < 6) {
+            setPasswordMsg({ type: 'error', text: 'Password must be at least 6 characters.' })
+            return
+        }
+        const currentUser = auth.currentUser
+        if (!currentUser?.email) return
+        setPasswordLoading(true)
+        try {
+            const credential = EmailAuthProvider.credential(currentUser.email, currentPassword)
+            await reauthenticateWithCredential(currentUser, credential)
+            await updatePassword(currentUser, newPassword)
+            setPasswordMsg({ type: 'success', text: 'Password changed successfully.' })
+            setShowChangePassword(false)
+            setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
+        } catch (err: any) {
+            const code = err?.code
+            if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+                setPasswordMsg({ type: 'error', text: 'Current password is incorrect.' })
+            } else if (code === 'auth/too-many-requests') {
+                setPasswordMsg({ type: 'error', text: 'Too many attempts. Try again later.' })
+            } else {
+                setPasswordMsg({ type: 'error', text: 'Failed to change password. Please try again.' })
+            }
+        } finally {
+            setPasswordLoading(false)
+        }
+    }, [currentPassword, newPassword, confirmPassword])
 
     // ── Logout ────────────────────────────────────────────────────────────────
     const { logout } = useAuth()
@@ -509,7 +569,7 @@ export function SettingsForm() {
                             />
                         </div>
                     </CardContent>
-                    <CardFooter className="border-t pt-4">
+                    <CardFooter className="border-t pt-4 flex flex-wrap gap-3">
                         <Button
                             onClick={handlePassChange}
                             disabled={loading || !passwords.current || !passwords.new || !passwords.confirm}
@@ -517,6 +577,16 @@ export function SettingsForm() {
                             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Update Password
                         </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleSendResetEmail}
+                            disabled={loading}
+                        >
+                            Send Reset Email
+                        </Button>
+                        {resetEmailSent && <p className="text-green-600 text-xs self-center">✓ Reset email sent to {auth.currentUser?.email}</p>}
+                        {resetEmailError && <p className="text-red-500 text-xs self-center">{resetEmailError}</p>}
                     </CardFooter>
                 </Card>
 

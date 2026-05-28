@@ -42,6 +42,7 @@ export function FlashcardsApp() {
     const [newDeckTitle, setNewDeckTitle] = useState("")
     const [loading, setLoading] = useState(false)
     const [user, setUser] = useState<any>(null)
+    const [decksLoading, setDecksLoading] = useState(true)
     const [showUpgrade, setShowUpgrade] = useState(false)
 
     // AI Creation State
@@ -51,24 +52,48 @@ export function FlashcardsApp() {
     const [aiTitle, setAiTitle] = useState("")
 
     useEffect(() => {
+        let unsubscribeSnapshot: (() => void) | null = null
+
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+            // Clean up previous snapshot listener if user changes
+            if (unsubscribeSnapshot) {
+                unsubscribeSnapshot()
+                unsubscribeSnapshot = null
+            }
+
             if (currentUser) {
                 setUser(currentUser)
-                // Real-time listener
+                setDecksLoading(true)
+
                 const q = query(collection(db, "decks"), where("userId", "==", currentUser.uid))
-                const unsubscribe = onSnapshot(q, (snapshot) => {
-                    const fetchedDecks = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    })) as any[]
-                    setDecks(fetchedDecks)
-                })
-                return () => unsubscribe()
+
+                unsubscribeSnapshot = onSnapshot(
+                    q,
+                    (snapshot) => {
+                        const fetchedDecks = snapshot.docs.map(d => ({
+                            id: d.id,
+                            ...d.data()
+                        })) as Deck[]
+                        setDecks(fetchedDecks)
+                        setDecksLoading(false)
+                    },
+                    (error) => {
+                        console.error('Firestore error loading decks:', error)
+                        setDecks([])
+                        setDecksLoading(false)
+                    }
+                )
             } else {
+                setUser(null)
                 setDecks([])
+                setDecksLoading(false)
             }
         })
-        return () => unsubscribeAuth()
+
+        return () => {
+            unsubscribeAuth()
+            if (unsubscribeSnapshot) unsubscribeSnapshot()
+        }
     }, [])
 
     const handleGenerateAI = useCallback(async () => {
@@ -248,7 +273,12 @@ export function FlashcardsApp() {
                 )}
             </div>
 
-            {studyMode && activeDeck ? (
+            {decksLoading ? (
+                <div className="flex flex-col items-center justify-center h-64 gap-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-muted-foreground text-sm">Loading your decks...</p>
+                </div>
+            ) : studyMode && activeDeck ? (
                 <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto w-full">
                     <div className="mb-4 flex items-center justify-between w-full">
                         <Button variant="ghost" onClick={() => setStudyMode(false)}>

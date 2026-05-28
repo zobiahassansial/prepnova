@@ -168,12 +168,18 @@ export function ResumeBuilder() {
         document.getElementById("print-resume")?.click()
     }, [])
 
-    const handleSelectResumeTemplate = useCallback((id: string) => {
+    const handleSelectResumeTemplate = useCallback((id: string, customHtml?: string) => {
         setResumeTemplateTouched(true)
-        setResumeData(prev => ({ ...prev, template: id as any }))
+        setResumeData(prev => ({
+            ...prev,
+            template: id as any,
+            activeTemplateId: id,
+            ...(customHtml ? { customTemplateHtml: customHtml } : {})
+        }))
     }, [])
 
-    const handleSelectCoverTemplate = useCallback((id: string) => {
+    const handleSelectCoverTemplate = useCallback((id: string, customHtml?: string) => {
+        setCoverTemplateTouched(true)
         setResumeData(prev => ({ ...prev, coverTemplate: id as any }))
     }, [])
 

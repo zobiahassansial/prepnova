@@ -219,10 +219,15 @@ export function NoteSummarizer() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Bullet points">Bullet points</SelectItem>
-                                            <SelectItem value="Paragraph">Paragraph</SelectItem>
-                                            <SelectItem value="Q&A">Q&A</SelectItem>
-                                            <SelectItem value="Flashcards layout">Flashcards layout</SelectItem>
+                                            <SelectItem value="Bullet points">📝 Bullet Points</SelectItem>
+                                            <SelectItem value="Paragraph">📄 Paragraph</SelectItem>
+                                            <SelectItem value="Q&A">❓ Q&amp;A</SelectItem>
+                                            <SelectItem value="Flashcards layout">🗂 Flashcards</SelectItem>
+                                            <SelectItem value="Quiz">🎯 Quiz (10 Qs)</SelectItem>
+                                            <SelectItem value="Assignment guide">📋 Assignment Guide</SelectItem>
+                                            <SelectItem value="Exam prep">🎓 Exam Prep</SelectItem>
+                                            <SelectItem value="Detailed notes">📖 Detailed Notes</SelectItem>
+                                            <SelectItem value="Short notes">⚡ Short Notes</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

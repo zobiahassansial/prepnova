@@ -478,18 +478,119 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
 
                 <AccordionItem value="skills">
                     <AccordionTrigger ref={skillsRef}>Skills</AccordionTrigger>
-                    <AccordionContent className="pt-2">
-                        <Label className="text-xs mb-2 block">Comma separated list</Label>
-                        <Textarea
-                            className={""}
-                            rows={3}
-                            value={data.skills.join(", ")}
-                            onChange={(e) => onChange({ ...data, skills: e.target.value.split(",").map(s => s.trim()) })}
-                            placeholder="React, TypeScript, Node.js (comma separated)"
-                        />
+                    <AccordionContent className="pt-2 space-y-3">
+                        {/* Tag display */}
+                        <div className="flex flex-wrap gap-2 min-h-[32px]">
+                            {data.skills.filter(s => s.trim()).map((skill, index) => (
+                                <span
+                                    key={index}
+                                    className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full border border-primary/20"
+                                >
+                                    {skill}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const newSkills = data.skills.filter((_, i) => i !== index)
+                                            onChange({ ...data, skills: newSkills })
+                                        }}
+                                        className="text-primary/60 hover:text-destructive transition-colors leading-none ml-0.5"
+                                    >
+                                        ×
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                        {/* Add skill input */}
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Type a skill and press Enter..."
+                                className="flex-1 text-sm h-9"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ',') {
+                                        e.preventDefault()
+                                        const val = (e.target as HTMLInputElement).value.trim().replace(/,$/, '')
+                                        if (val && !data.skills.includes(val)) {
+                                            onChange({ ...data, skills: [...data.skills.filter(s => s.trim()), val] });
+                                            (e.target as HTMLInputElement).value = ''
+                                        }
+                                    }
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-9 px-3"
+                                onClick={(e) => {
+                                    const input = (e.currentTarget.previousElementSibling as HTMLInputElement)
+                                    const val = input.value.trim()
+                                    if (val && !data.skills.includes(val)) {
+                                        onChange({ ...data, skills: [...data.skills.filter(s => s.trim()), val] })
+                                        input.value = ''
+                                    }
+                                }}
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Press Enter or comma to add a skill. Click × to remove.</p>
                     </AccordionContent>
                 </AccordionItem>
             </Accordion>
+
+            {/* Custom Sections */}
+            {(data.customSections || []).map((section: any, index: number) => (
+                <div key={section.id} className="border rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b">
+                        <input
+                            type="text"
+                            value={section.title}
+                            onChange={(e) => {
+                                const updated = [...(data.customSections || [])]
+                                updated[index] = { ...updated[index], title: e.target.value }
+                                onChange({ ...data, customSections: updated })
+                            }}
+                            placeholder="Section Title (e.g. Publications, Awards)"
+                            className="bg-transparent font-semibold text-sm outline-none flex-1 text-foreground"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const updated = (data.customSections || []).filter((_: any, i: number) => i !== index)
+                                onChange({ ...data, customSections: updated })
+                            }}
+                            className="text-muted-foreground hover:text-destructive transition-colors ml-2 text-xl leading-none"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <div className="p-4">
+                        <Textarea
+                            value={section.content}
+                            onChange={(e) => {
+                                const updated = [...(data.customSections || [])]
+                                updated[index] = { ...updated[index], content: e.target.value }
+                                onChange({ ...data, customSections: updated })
+                            }}
+                            placeholder="Add your content here..."
+                            rows={3}
+                            className="resize-none text-sm"
+                        />
+                    </div>
+                </div>
+            ))}
+
+            {/* Add Section Button */}
+            <button
+                type="button"
+                onClick={() => {
+                    const newSection = { id: Date.now().toString(), title: '', content: '' }
+                    onChange({ ...data, customSections: [...(data.customSections || []), newSection] })
+                }}
+                className="w-full py-3 border border-dashed border-border hover:border-primary rounded-lg text-muted-foreground hover:text-primary text-sm font-medium transition-all flex items-center justify-center gap-2 mt-2"
+            >
+                <Plus className="h-4 w-4" /> Add Custom Section
+            </button>
         </div >
     )
 }

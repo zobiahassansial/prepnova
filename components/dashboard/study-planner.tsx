@@ -268,6 +268,45 @@ export function StudyPlanner() {
             toast.error("Failed to complete task")
         }
     }, [selectedTask, user])
+
+    // Pre-compute values that were previously inside JSX useMemo calls (hook rule violation fix)
+    const calendarEvents = useMemo(() => schedule.map((s: StudySchedule) => {
+        const task = tasks.find((t: StudyTask) => t.id === s.taskId)
+        if (!task) return null
+        const start = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
+        const [hours, mins] = s.scheduledTime.split(":").map(Number)
+        start.setHours(hours, mins, 0, 0)
+        const end = new Date(start.getTime() + (task.durationMinutes || 60) * 60000)
+        return {
+            id: s.id,
+            taskId: task.id,
+            title: task.title,
+            start,
+            end,
+            resource: { ...task, scheduleId: s.id }
+        }
+    }).filter(Boolean), [schedule, tasks])
+
+    const tabDates = useMemo(() => {
+        const dates = Array.from(new Set([...schedule.map((s: StudySchedule) => {
+            const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
+            return d.toDateString()
+        }), activeTab]))
+        return dates.sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())
+    }, [schedule, activeTab])
+
+    const scheduledTasksForDay = useMemo(() => schedule.filter((s: StudySchedule) => {
+        const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
+        return d.toDateString() === activeTab
+    })
+        .sort((a: StudySchedule, b: StudySchedule) => {
+            const taskA = tasks.find((t: StudyTask) => t.id === a.taskId)
+            const taskB = tasks.find((t: StudyTask) => t.id === b.taskId)
+            if (taskA?.status === 'completed' && taskB?.status !== 'completed') return 1
+            if (taskA?.status !== 'completed' && taskB?.status === 'completed') return -1
+            return (a.orderIndex || 0) - (b.orderIndex || 0)
+        }), [schedule, tasks, activeTab])
+
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
             <div className="flex items-center justify-between">
@@ -423,22 +462,7 @@ export function StudyPlanner() {
                     {showCalendar ? (
                         schedule.length > 0 ? (
                             <StudyCalendar
-                                events={useMemo(() => schedule.map((s: StudySchedule) => {
-                                    const task = tasks.find((t: StudyTask) => t.id === s.taskId)
-                                    if (!task) return null
-                                    const start = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
-                                    const [hours, mins] = s.scheduledTime.split(":").map(Number)
-                                    start.setHours(hours, mins, 0, 0)
-                                    const end = new Date(start.getTime() + (task.durationMinutes || 60) * 60000)
-                                    return {
-                                        id: s.id,
-                                        taskId: task.id,
-                                        title: task.title,
-                                        start,
-                                        end,
-                                        resource: { ...task, scheduleId: s.id }
-                                    }
-                                }).filter(Boolean), [schedule, tasks]) as any}
+                                events={calendarEvents as any}
                                 // @ts-ignore
                                 onEventDrop={handleEventDrop}
                                 onSelectEvent={handleSelectEvent}
@@ -469,13 +493,7 @@ export function StudyPlanner() {
                                 {/* Browser-like Tab Bar */}
                                 <div className="w-full overflow-x-auto bg-muted/20 pt-2 px-2 rounded-t-lg border-b border-border [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex items-center">
                                     <TabsList className="w-full justify-start h-auto bg-transparent p-0 space-x-1 flex-1">
-                                        {useMemo(() => {
-                                            const dates = Array.from(new Set([...schedule.map((s: StudySchedule) => {
-                                                const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
-                                                return d.toDateString()
-                                            }), activeTab]))
-                                            return dates.sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())
-                                        }, [schedule, activeTab])
+                                        {tabDates
                                             .map(dateStr => (
                                                 <TabsTrigger
                                                     key={dateStr}
@@ -533,18 +551,7 @@ export function StudyPlanner() {
                                         }}
                                     >
                                         <AnimatePresence>
-                                            {useMemo(() => schedule.filter((s: StudySchedule) => {
-                                                const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
-                                                return d.toDateString() === activeTab
-                                            })
-                                                .sort((a: StudySchedule, b: StudySchedule) => {
-                                                    const taskA = tasks.find((t: StudyTask) => t.id === a.taskId)
-                                                    const taskB = tasks.find((t: StudyTask) => t.id === b.taskId)
-                                                    // Completed at bottom
-                                                    if (taskA?.status === 'completed' && taskB?.status !== 'completed') return 1
-                                                    if (taskA?.status !== 'completed' && taskB?.status === 'completed') return -1
-                                                    return (a.orderIndex || 0) - (b.orderIndex || 0)
-                                                }), [schedule, tasks, activeTab])
+                                            {scheduledTasksForDay
                                                 .map((s: StudySchedule, index: number) => {
                                                     const task = tasks.find((t: StudyTask) => t.id === s.taskId)
                                                     if (!task) return null
