@@ -1,12 +1,16 @@
 "use server"
 
-import { getGeminiModel } from "@/lib/gemini"
+import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
 // ✅ FIX: Use 'require' to bypass TypeScript errors
 const PDFParser = require("pdf2json");
 const mammoth = require("mammoth");
 
-export async function processAndSummarizeNote(fileUrl: string, fileType: string) {
+export async function processAndSummarizeNote(
+    fileUrl: string, 
+    fileType: string, 
+    options?: { outputType?: string, tone?: string, length?: string }
+) {
     if (!fileUrl) return { error: "No file URL provided" }
 
     try {
@@ -53,10 +57,17 @@ export async function processAndSummarizeNote(fileUrl: string, fileType: string)
             return { error: "Could not read text. Is this a scanned PDF? Please use text-based files." }
         }
 
-        const model = getGeminiModel()
+        const model = getGroqModel()
+
+        const { outputType = "Bullet points", tone = "Academic", length = "Medium" } = options || {}
 
         const prompt = `
             You are an elite academic assistant. Analyze the following document content and provide a highly structured summary.
+            
+            USER PREFERENCES:
+            - Output Type: ${outputType}
+            - Tone: ${tone}
+            - Length: ${length}
             
             Return the response in valid JSON format ONLY. Structure it exactly like this:
             {
@@ -72,10 +83,13 @@ export async function processAndSummarizeNote(fileUrl: string, fileType: string)
             ${text.slice(0, 100000)}
         `
 
-        const result = await model.generateContent(prompt)
+        const result = await model.chat.completions.create({
+            model: GROQ_MODEL,
+            messages: [{ role: "user", content: prompt }]
+        });
 
-        const aiResponse = await result.response
-        const jsonString = aiResponse.text().replace(/```json/g, "").replace(/```/g, "").trim()
+        const textResponse = result.choices[0]?.message?.content || "";
+        const jsonString = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
 
         try {
             const parsedData = JSON.parse(jsonString)

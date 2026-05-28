@@ -1,15 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet" // Need to create Sheet if not exists? Assuming not.
 // Actually, let's skip Sheet for now and just use mobile Sidebar.
 
-import { useSession } from "next-auth/react"
+import { useAuth } from "@/components/providers/auth-provider"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { signOut } from "next-auth/react"
 
 export default function DashboardLayout({
     children,
@@ -18,10 +19,18 @@ export default function DashboardLayout({
 }) {
     const [isCollapsed, setIsCollapsed] = useState(false)
     const [isMobileOpen, setIsMobileOpen] = useState(false)
-    const { status } = useSession()
+    const { user, loading } = useAuth()
     const router = useRouter()
 
-    if (status === "loading") {
+    useEffect(() => {
+        if (!user && !loading) {
+            // Firebase has no user, so we must clear NextAuth session too
+            // otherwise middleware will force us back to /dashboard
+            signOut({ callbackUrl: "/login" })
+        }
+    }, [user, loading])
+
+    if (loading) {
         return (
             <div className="h-screen w-full flex items-center justify-center bg-muted/20">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -29,8 +38,7 @@ export default function DashboardLayout({
         )
     }
 
-    if (status === "unauthenticated") {
-        router.push("/login")
+    if (!user && !loading) {
         return null // Prevent flash
     }
 

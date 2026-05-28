@@ -5,6 +5,7 @@ import { useRef, useEffect, useCallback, useMemo } from "react"
 import { useReactToPrint } from "react-to-print"
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
+import * as Templates from "./resume-templates"
 
 interface ResumePreviewProps {
     data: ResumeData
@@ -222,6 +223,16 @@ export function ResumePreview({ data, onPageCountChange }: ResumePreviewProps) {
                         <div className="w-full min-h-[1122px] bg-white relative page-break flex flex-col">
                             {/* RESUME PAGE */}
                             {(() => {
+                                const activeId = data.activeTemplateId || data.template;
+                                const parts = activeId.split('-');
+                                const pascal = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+                                const componentName = `Template${pascal}`;
+                                const TemplateComponent = (Templates as any)[componentName];
+
+                                if (TemplateComponent) {
+                                    return <TemplateComponent data={data} scale={1} />
+                                }
+
                                 switch (data.template) {
                                     case "template_modern_pro":
                                         return (

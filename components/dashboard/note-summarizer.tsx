@@ -5,12 +5,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { UploadCloud, FileText, Brain, Loader2, Copy } from "lucide-react"
 import { toast } from "sonner"
+import { useReactToPrint } from "react-to-print"
 import { auth, db, storage } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
 import { collection, onSnapshot, query, where, addDoc, Timestamp } from "firebase/firestore"
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
+import { logActivity } from "@/lib/logger"
 import { checkQuota, incrementQuota } from "@/lib/subscription"
 import { UpgradeModal } from "@/components/pricing/upgrade-modal"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Download, File as FileIcon, Printer } from "lucide-react"
 
 type NoteSummary = {
     id: string
@@ -27,6 +31,12 @@ export function NoteSummarizer() {
     const [user, setUser] = useState<any>(null)
     const [showUpgrade, setShowUpgrade] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const printRef = useRef<HTMLDivElement>(null)
+
+    // Options
+    const [outputType, setOutputType] = useState("Bullet points")
+    const [tone, setTone] = useState("Academic")
+    const [length, setLength] = useState("Medium")
 
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -56,6 +66,36 @@ export function NoteSummarizer() {
             setSelectedSummary(summaries[0])
         }
     }, [summaries, selectedSummary])
+
+    const handleExportText = () => {
+        if (!selectedSummary) return
+        const blob = new Blob([selectedSummary.summary], { type: "text/plain;charset=utf-8" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `${selectedSummary.title}-summary.txt`
+        a.click()
+        URL.revokeObjectURL(url)
+        toast.success("Downloaded as Text")
+    }
+
+    const handleExportWord = () => {
+        if (!selectedSummary) return
+        const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${selectedSummary.title}</title></head><body><pre>${selectedSummary.summary}</pre></body></html>`
+        const blob = new Blob([html], { type: 'application/vnd.ms-word;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `${selectedSummary.title}-summary.doc`
+        a.click()
+        URL.revokeObjectURL(url)
+        toast.success("Downloaded as Word")
+    }
+
+    const handlePrint = useReactToPrint({
+        contentRef: printRef,
+        documentTitle: selectedSummary?.title || "AI Summary",
+    })
 
     const handleUpload = useCallback(async (file: File) => {
         if (!user) {
@@ -99,7 +139,9 @@ export function NoteSummarizer() {
                 // Call Server Action to Process & Summarize
                 const { processAndSummarizeNote } = await import("@/actions/notes")
 
-                const result = await processAndSummarizeNote(downloadURL, file.type)
+                const result = await processAndSummarizeNote(downloadURL, file.type, {
+                    outputType, tone, length
+                })
 
                 if (!result.success || result.error) {
                     toast.error(result.error || "Failed to process note")
@@ -107,7 +149,15 @@ export function NoteSummarizer() {
                     return
                 }
 
-                const aiSummary = result.extractedText || "No summary generated."
+                let aiSummary = "No summary generated."
+                if (result.data) {
+                    aiSummary = `${result.data.emoji || '📝'} ${result.data.title || 'Summary'}\n\n` +
+                                `Overview:\n${result.data.summary}\n\n` +
+                                `Key Points:\n${(result.data.keyPoints || []).map((p: string) => '- ' + p).join('\n')}\n\n` +
+                                `Action Items:\n${(result.data.actionItems || []).map((p: string) => '- ' + p).join('\n')}`
+                } else if (result.extractedText) {
+                    aiSummary = result.extractedText
+                }
 
                 // Save to Firestore
                 await addDoc(collection(db, "notes"), {
@@ -118,13 +168,15 @@ export function NoteSummarizer() {
                     createdAt: Timestamp.now()
                 })
 
+                await logActivity(user.uid, "summary_generated", `Summarized note: "${file.name}"`)
+
                 await incrementQuota(user.uid, "summary")
 
                 setIsUploading(false)
                 toast.success("Summary generated successfully!")
             }
         )
-    }, [user])
+    }, [user, outputType, tone, length])
 
     const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -138,7 +190,12 @@ export function NoteSummarizer() {
 
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
-            <UpgradeModal open={showUpgrade} onOpenChange={setShowUpgrade} featureName="AI Summary" />
+            {showUpgrade && (
+                <UpgradeModal 
+                    feature="AI Summary" 
+                    onClose={() => setShowUpgrade(false)} 
+                />
+            )}
 
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold tracking-tight">AI Note Summarizer</h1>
@@ -154,6 +211,48 @@ export function NoteSummarizer() {
                             <CardDescription>Upload PDF, DOCX, or Images. AI will summarize them instantly.</CardDescription>
                         </CardHeader>
                         <CardContent>
+                            <div className="grid grid-cols-3 gap-3 mb-6">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Output Type</label>
+                                    <Select value={outputType} onValueChange={setOutputType}>
+                                        <SelectTrigger className="text-xs h-8">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Bullet points">Bullet points</SelectItem>
+                                            <SelectItem value="Paragraph">Paragraph</SelectItem>
+                                            <SelectItem value="Q&A">Q&A</SelectItem>
+                                            <SelectItem value="Flashcards layout">Flashcards layout</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Tone</label>
+                                    <Select value={tone} onValueChange={setTone}>
+                                        <SelectTrigger className="text-xs h-8">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Academic">Academic</SelectItem>
+                                            <SelectItem value="Casual">Casual</SelectItem>
+                                            <SelectItem value="Professional">Professional</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Length</label>
+                                    <Select value={length} onValueChange={setLength}>
+                                        <SelectTrigger className="text-xs h-8">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Short">Short</SelectItem>
+                                            <SelectItem value="Medium">Medium</SelectItem>
+                                            <SelectItem value="Long">Long</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
                             <input
                                 type="file"
                                 className="hidden"
@@ -229,12 +328,26 @@ export function NoteSummarizer() {
                                     <CardTitle>AI Summary</CardTitle>
                                     <CardDescription>{selectedSummary.title}</CardDescription>
                                 </div>
-                                <Button variant="ghost" size="icon">
-                                    <Copy className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                    <Button variant="ghost" size="icon" onClick={() => {
+                                        navigator.clipboard.writeText(selectedSummary.summary)
+                                        toast.success("Copied to clipboard!")
+                                    }} title="Copy Text">
+                                        <Copy className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={handleExportText} title="Export as Text">
+                                        <FileIcon className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={handleExportWord} title="Export as Word">
+                                        <Download className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={handlePrint} title="Export as PDF / Print">
+                                        <Printer className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </CardHeader>
-                            <CardContent className="flex-1 overflow-y-auto mt-4">
-                                <div className="prose dark:prose-invert text-sm max-w-none">
+                            <CardContent className="flex-1 overflow-y-auto mt-4" ref={printRef}>
+                                <div className="prose dark:prose-invert text-sm max-w-none p-4 bg-background">
                                     <pre className="whitespace-pre-wrap font-sans">{selectedSummary.summary}</pre>
                                 </div>
                             </CardContent>

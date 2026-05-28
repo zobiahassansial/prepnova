@@ -33,6 +33,10 @@ export const PLAN_LIMITS = {
 }
 
 export async function getUserSubscription(userId: string) {
+    if (process.env.NODE_ENV === "development") {
+        return { plan: "pro", status: "active" }
+    }
+
     const subRef = doc(db, "users", userId, "subscription", "info")
     const snap = await getDoc(subRef)
 
@@ -45,6 +49,10 @@ export async function getUserSubscription(userId: string) {
 }
 
 export async function checkLimit(userId: string, feature: "resumes" | "summaries" | "flashcards") {
+    if (process.env.NODE_ENV === "development") {
+        return { allowed: true, remaining: 999999 }
+    }
+
     const sub = await getUserSubscription(userId)
     const plan = sub.plan || "free"
     const limit = (PLAN_LIMITS as any)[plan]?.[feature] || 0

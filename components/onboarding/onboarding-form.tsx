@@ -47,6 +47,13 @@ export function OnboardingForm() {
                 updatedAt: new Date()
             }, { merge: true })
 
+            const settingsRef = doc(db, "users", user.uid, "settings", "onboarding")
+            await setDoc(settingsRef, {
+                educationLevel: role,
+                ...(role === "student" ? studentData : proData),
+                completedAt: new Date()
+            }, { merge: true })
+
             toast.success("Profile updated!")
             router.push("/dashboard")
         } catch (error) {

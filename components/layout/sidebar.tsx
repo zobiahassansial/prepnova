@@ -27,40 +27,12 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
     toggleSidebar: () => void
 }
 
-import { doc, onSnapshot } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { useUserProfile } from "@/hooks/useUserProfile"
 
 export function Sidebar({ className, isCollapsed, toggleSidebar }: SidebarProps) {
     const pathname = usePathname()
     const { user, logout } = useAuth()
-    const [profile, setProfile] = useState<{ name: string, role: string } | null>(null)
-
-    // Listen to profile changes
-    React.useEffect(() => {
-        if (!user) {
-            setProfile(null)
-            return
-        }
-
-        // Initial set
-        setProfile({
-            name: user.displayName || "User",
-            role: "Student" // default
-        })
-
-        const unsub = onSnapshot(doc(db, "users", user.uid), (doc: any) => {
-            if (doc.exists()) {
-                const data = doc.data()
-                setProfile({
-                    name: data.name || user.displayName || "User",
-                    role: data.role || "Student"
-                })
-            }
-        })
-
-        return () => unsub()
-
-    }, [user])
+    const { profile } = useUserProfile()
 
     const routes = [
         // ... (routes stay same, just skip listing them here for brevity of the tool call context, assumes context is sufficient if I don't touch them)
@@ -149,9 +121,13 @@ export function Sidebar({ className, isCollapsed, toggleSidebar }: SidebarProps)
             <div className="p-4 border-t">
                 {!isCollapsed ? (
                     <div className="flex items-center gap-3 mb-4 p-2 rounded-lg bg-muted/50">
-                        <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold uppercase">
-                            {profile?.name ? profile.name.substring(0, 2) : "JD"}
-                        </div>
+                        {profile?.photoURL ? (
+                            <img src={profile.photoURL} alt="Avatar" className="h-8 w-8 rounded-full object-cover" />
+                        ) : (
+                            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold uppercase shrink-0">
+                                {profile?.name ? profile.name.substring(0, 2) : "JD"}
+                            </div>
+                        )}
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{profile?.name || "User"}</p>
                             <p className="text-xs text-muted-foreground truncate">{profile?.role || "Student"}</p>
@@ -159,9 +135,13 @@ export function Sidebar({ className, isCollapsed, toggleSidebar }: SidebarProps)
                     </div>
                 ) : (
                     <div className="flex justify-center mb-4">
-                        <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs uppercase" title={`${profile?.name} (${profile?.role})`}>
-                            {profile?.name ? profile.name.substring(0, 2) : "JD"}
-                        </div>
+                        {profile?.photoURL ? (
+                            <img src={profile.photoURL} alt="Avatar" className="h-8 w-8 rounded-full object-cover" title={`${profile?.name} (${profile?.role})`} />
+                        ) : (
+                            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs uppercase" title={`${profile?.name} (${profile?.role})`}>
+                                {profile?.name ? profile.name.substring(0, 2) : "JD"}
+                            </div>
+                        )}
                     </div>
                 )}
 

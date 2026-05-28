@@ -1,18 +1,17 @@
 import { db } from "@/lib/firebase"
 import { addDoc, collection, Timestamp } from "firebase/firestore"
 
-export type ActivityType = "study_session" | "task_complete" | "deck_created" | "resume_created" | "task_created"
+export type ActivityType = "study_session" | "task_complete" | "deck_created" | "deck_reviewed" | "resume_created" | "resume_saved" | "summary_generated" | "doc_scanned" | "task_created"
 
-export async function logActivity(userId: string, action: ActivityType, details: Record<string, any>, value: number = 0) {
+export async function logActivity(userId: string, type: ActivityType, description: string, extraData: Record<string, any> = {}) {
     if (!userId) return
 
     try {
-        await addDoc(collection(db, "activity_logs"), {
-            userId,
-            action,
-            details,
-            value,
-            createdAt: Timestamp.now()
+        await addDoc(collection(db, "users", userId, "activityLog"), {
+            type,
+            description,
+            ...extraData,
+            timestamp: Timestamp.now()
         })
     } catch (error) {
         console.error("Failed to log activity:", error)

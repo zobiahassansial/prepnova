@@ -38,6 +38,7 @@ export default function DashboardPage() {
     const router = useRouter()
     const [user, setUser] = useState<any>(null)
     const [userName, setUserName] = useState("Student")
+    const [userPhoto, setUserPhoto] = useState<string | undefined>(undefined)
     const [isLoadingStats, setIsLoadingStats] = useState(true)
 
     // Stats
@@ -106,9 +107,11 @@ export default function DashboardPage() {
                     if (data.name) display = capitalize(data.name)
                     if (data.role) display += ` (${data.role})`
                     setUserName(display)
+                    if (data.photoURL) setUserPhoto(data.photoURL)
                     if (data.streak !== undefined) setStreak(data.streak)
                 } else if (currentUser.displayName) {
                     setUserName(capitalize(currentUser.displayName) + " (Student)")
+                    if (currentUser.photoURL) setUserPhoto(currentUser.photoURL)
                 }
             })
 
@@ -168,6 +171,10 @@ export default function DashboardPage() {
                     setStudyHours(Math.round((totalMinutes / 60) * 10) / 10)
                     setChartData(days.map(d => ({ name: d, total: Math.round(((map.get(d) || 0) / 60) * 10) / 10 })))
                     setIsLoadingStats(false)
+                },
+                (error) => {
+                    console.error("Error fetching study sessions:", error)
+                    setIsLoadingStats(false)
                 }
             )
 
@@ -181,6 +188,10 @@ export default function DashboardPage() {
                 (snap) => {
                     setRecentActivity(snap.docs.map(d => ({ id: d.id, ...d.data() })))
                     // If no study sessions loaded yet, clear loading
+                    setIsLoadingStats(false)
+                },
+                (error) => {
+                    console.error("Error fetching recent activity:", error)
                     setIsLoadingStats(false)
                 }
             )
@@ -205,7 +216,7 @@ export default function DashboardPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <WelcomeBanner name={userName} streak={streak} />
+            <WelcomeBanner name={userName} photoURL={userPhoto} streak={streak} />
 
             {/* ── Stats Grid ──────────────────────────────────────────────────── */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

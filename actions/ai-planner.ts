@@ -1,6 +1,6 @@
 "use server"
 
-import { getGeminiModel } from "@/lib/gemini"
+import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
 /* -------------------------------------------------
    Generate Study Tasks (AI Generate)
@@ -11,14 +11,14 @@ export async function generateStudyPlan(
   hoursPerDay: number,
   days: number
 ) {
-  const apiKey = process.env.GEMINI_API_KEY
+  const apiKey = process.env.GROQ_API_KEY
 
   if (!apiKey) {
-    return { error: "GEMINI_API_KEY not configured" }
+    return { error: "GROQ_API_KEY not configured" }
   }
 
   try {
-    const model = getGeminiModel()
+    const model = getGroqModel()
 
     const prompt = `
 You are a strict Study Planner AI.
@@ -34,34 +34,32 @@ RULES:
 - Difficulty must be: "Easy", "Medium", or "Hard"
 - Do NOT schedule tasks
 - All tasks MUST be UNSCHEDULED initially
-- Output VALID JSON ARRAY ONLY
-- Schedule tasks sequentially in the SAME DAY where possible
-- Use start times that follow the previous task + break
-- Do NOT leave large idle gaps (>45 minutes) unless moving to next day
-- NEVER include "(Dev Mode)" or any environment/debug text in task titles
+- Output VALID JSON OBJECT ONLY with a "plan" array
 
 Output format:
-[
-  {
-    "title": "Task title",
-    "subject": "Subject",
-    "topic": "Specific topic",
-    "priority": "High",
-    "difficulty": "Medium",
-    "durationMinutes": 60,
-    "dayOffset": -1
-  }
-]
-`
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
-
-    const jsonMatch = text.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) {
-      throw new Error("Invalid AI response: JSON array not found")
+{
+  "plan": [
+    {
+      "title": "Task title",
+      "subject": "Subject",
+      "topic": "Specific topic",
+      "priority": "High",
+      "difficulty": "Medium",
+      "durationMinutes": 60,
+      "dayOffset": -1
     }
+  ]
+}
+`
+    const result = await model.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" }
+    });
+    const text = result.choices[0]?.message?.content || "{}";
 
-    const plan = JSON.parse(jsonMatch[0])
+    const data = JSON.parse(text)
+    const plan = data.plan
 
     if (!Array.isArray(plan)) {
       throw new Error("AI response is not an array")
@@ -92,10 +90,10 @@ export async function scheduleUserTasks(
   daysToSchedule: number = 1,
   startDate?: string
 ) {
-  const apiKey = process.env.GEMINI_API_KEY
+  const apiKey = process.env.GROQ_API_KEY
 
   if (!apiKey) {
-    return { error: "GEMINI_API_KEY not configured" }
+    return { error: "GROQ_API_KEY not configured" }
   }
 
   if (!tasks || tasks.length === 0) {
@@ -103,7 +101,7 @@ export async function scheduleUserTasks(
   }
 
   try {
-    const model = getGeminiModel()
+    const model = getGroqModel()
 
     // Calculate Date Range
     let startDateStr: string
@@ -183,15 +181,14 @@ OUTPUT FORMAT (STRICT JSON ONLY):
 }
 `
 
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
+    const result = await model.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" }
+    });
+    const text = result.choices[0]?.message?.content || "{}";
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error("Invalid AI response: JSON object not found")
-    }
-
-    const schedule = JSON.parse(jsonMatch[0])
+    const schedule = JSON.parse(text)
 
     if (!Array.isArray(schedule.scheduled_tasks)) {
       throw new Error("Invalid scheduling format")

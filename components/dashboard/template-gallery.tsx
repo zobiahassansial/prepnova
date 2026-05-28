@@ -26,7 +26,7 @@ const templates: TemplateOption[] = [
     },
     {
         id: "template_sidebar",
-        name: "Sidebar",
+        name: "Legacy Sidebar",
         description: "Structured layout",
         thumbnailClass: "bg-white flex flex-row shadow-sm h-full"
     },
@@ -41,7 +41,23 @@ const templates: TemplateOption[] = [
         name: "Creative Blocks",
         description: "Unique section headers",
         thumbnailClass: "bg-white p-2 flex flex-col gap-2 shadow-sm"
-    }
+    },
+    { id: "classic", name: "Classic", description: "Professional", thumbnailClass: "bg-white p-2 border" },
+    { id: "modern", name: "Modern", description: "Clean", thumbnailClass: "bg-white p-2 border" },
+    { id: "minimal", name: "Minimal", description: "Simple", thumbnailClass: "bg-white p-2 border" },
+    { id: "executive", name: "Executive", description: "Corporate", thumbnailClass: "bg-white p-2 border" },
+    { id: "creative", name: "Creative", description: "Unique", thumbnailClass: "bg-white p-2 border" },
+    { id: "compact", name: "Compact", description: "Dense", thumbnailClass: "bg-white p-2 border" },
+    { id: "two-column", name: "Two Column", description: "Split layout", thumbnailClass: "bg-white p-2 border" },
+    { id: "sidebar", name: "Sidebar", description: "Sidebar layout", thumbnailClass: "bg-white p-2 border" },
+    { id: "elegant", name: "Elegant", description: "Refined", thumbnailClass: "bg-white p-2 border" },
+    { id: "bold", name: "Bold", description: "Strong", thumbnailClass: "bg-white p-2 border" },
+    { id: "academic", name: "Academic", description: "CV style", thumbnailClass: "bg-white p-2 border" },
+    { id: "tech", name: "Tech", description: "Developer", thumbnailClass: "bg-white p-2 border" },
+    { id: "clean", name: "Clean", description: "Minimalist", thumbnailClass: "bg-white p-2 border" },
+    { id: "timeline", name: "Timeline", description: "Chronological", thumbnailClass: "bg-white p-2 border" },
+    { id: "infographic", name: "Infographic", description: "Visual", thumbnailClass: "bg-white p-2 border" },
+    { id: "custom", name: "Custom HTML", description: "Bring your own", thumbnailClass: "bg-gray-800 p-2 text-white border" },
 ]
 
 const coverTemplates: TemplateOption[] = [

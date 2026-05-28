@@ -1,12 +1,12 @@
 "use server"
 
-import { getGeminiModel } from "@/lib/gemini"
+import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
 export async function generateFlashcardsFromText(text: string) {
-  const apiKey = process.env.GEMINI_API_KEY
+  const apiKey = process.env.GROQ_API_KEY
 
   if (!apiKey) {
-    console.error("Missing GEMINI_API_KEY in server environment")
+    console.error("Missing GROQ_API_KEY in server environment")
     return { error: "AI Service Unavailable (Missing Configuration)" }
   }
 
@@ -15,7 +15,7 @@ export async function generateFlashcardsFromText(text: string) {
   }
 
   try {
-    const model = getGeminiModel()
+    const model = getGroqModel()
 
     const truncatedText = text.slice(0, 15000)
 
@@ -28,8 +28,11 @@ Text:
 ${truncatedText}
 `
 
-    const result = await model.generateContent(prompt)
-    const content = result.response.text()
+    const result = await model.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [{ role: "user", content: prompt }]
+    });
+    const content = result.choices[0]?.message?.content || "";
 
     if (!content) return { error: "No response from AI" }
 

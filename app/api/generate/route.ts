@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getGroqModel, GROQ_MODEL } from "@/lib/groq";
 
 const PDFParser = require("pdf2json");
-const genAI = new GoogleGenerativeAI("AIzaSyAcwwBsOm-vfcGGMSwKNMmjThvAgpNXz50"); 
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`Generating ${targetCardCount} cards for length ${contentLength}`);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const model = getGroqModel();
     
     const prompt = `
       You are a strict teacher. I need exactly ${targetCardCount} flashcards from this text.
@@ -43,9 +42,12 @@ export async function POST(req: NextRequest) {
       Text: ${text.slice(0, 100000)}
     `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const cleanedText = response.text().replace(/```json/g, "").replace(/```/g, "").trim();
+    const result = await model.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const textResponse = result.choices[0]?.message?.content || "";
+    const cleanedText = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
     
     return NextResponse.json({ flashcards: JSON.parse(cleanedText) });
 

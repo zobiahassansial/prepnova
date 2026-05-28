@@ -1,6 +1,6 @@
 "use server"
 
-import { getGeminiModel } from "@/lib/gemini"
+import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
 type ResumeInput = {
   fullName: string
@@ -13,14 +13,14 @@ type ResumeInput = {
 }
 
 export async function generateResumeFromForm(data: ResumeInput) {
-  const apiKey = process.env.GEMINI_API_KEY
+  const apiKey = process.env.GROQ_API_KEY
 
   if (!apiKey) {
-    return { error: "GEMINI_API_KEY not configured" }
+    return { error: "GROQ_API_KEY not configured" }
   }
 
   try {
-    const model = getGeminiModel()
+    const model = getGroqModel()
 
     const toneInstruction =
       data.resumeTone === "formal"
@@ -73,8 +73,11 @@ Education:
 - ...
 `
 
-    const result = await model.generateContent(prompt)
-    const resumeText = result.response.text()
+    const result = await model.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [{ role: "user", content: prompt }]
+    });
+    const resumeText = result.choices[0]?.message?.content || "";
 
     return { resume: resumeText }
 

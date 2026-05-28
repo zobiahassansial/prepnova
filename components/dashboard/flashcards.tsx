@@ -105,8 +105,7 @@ export function FlashcardsApp() {
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             })
-
-            await logActivity(user.uid, "deck_created", { title: aiTitle, count: flashcards.length, type: "AI" })
+            await logActivity(user.uid, "deck_created", `Created AI deck: ${aiTitle}`, { count: flashcards.length, type: "AI" })
 
             await incrementQuota(user.uid, "flashcard")
 
@@ -170,8 +169,7 @@ export function FlashcardsApp() {
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             })
-
-            await logActivity(user.uid, "deck_created", { title: newDeckTitle, count: mockCards.length })
+            await logActivity(user.uid, "deck_created", `Created deck: ${newDeckTitle}`, { count: mockCards.length })
 
             toast.success("Deck created!")
             setNewDeckOpen(false)
@@ -187,7 +185,12 @@ export function FlashcardsApp() {
 
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
-            <UpgradeModal open={showUpgrade} onOpenChange={setShowUpgrade} featureName="Flashcards" />
+            {showUpgrade && (
+                <UpgradeModal 
+                    feature="Flashcards" 
+                    onClose={() => setShowUpgrade(false)} 
+                />
+            )}
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold tracking-tight">Flashcards & Revision</h1>
                 {!studyMode && (

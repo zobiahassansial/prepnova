@@ -12,6 +12,10 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
+console.log("[Firebase Debug] Initializing with Project ID:", firebaseConfig.projectId);
+console.log("[Firebase Debug] API Key starts with:", firebaseConfig.apiKey.substring(0, 10) + "...");
+
+
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);

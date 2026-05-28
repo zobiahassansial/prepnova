@@ -59,6 +59,7 @@ export function StudyPlanner() {
     const [detailOpen, setDetailOpen] = useState(false)
     const [selectedTask, setSelectedTask] = useState<StudyTask | null>(null)
     const [dropIndicator, setDropIndicator] = useState<{ id: string, position: 'top' | 'bottom' } | null>(null)
+    const [timerOpen, setTimerOpen] = useState(false)
 
     // --- Auth & Data Fetching ---
     useEffect(() => {
@@ -260,12 +261,7 @@ export function StudyPlanner() {
             await updateDoc(taskRef, { status: "completed" })
             await logStudyActivity(user.uid, selectedTask.id, "completed", `Task completed: ${selectedTask.title}`)
             // Log to activityLog for dashboard feed
-            await addDoc(collection(db, "users", user.uid, "activityLog"), {
-                type: "task_complete",
-                description: `Completed: "${selectedTask.title}"`,
-                icon: "✅",
-                timestamp: Timestamp.now(),
-            })
+            await logActivity(user.uid, "task_complete", `Completed: "${selectedTask.title}"`)
             toast.success("Task completed!")
             setDetailOpen(false)
         } catch (e) {
@@ -281,12 +277,20 @@ export function StudyPlanner() {
                 </div>
                 <div className="flex gap-2">
                     <Button
-                        variant={showCalendar ? "secondary" : "ghost"}
-                        size="icon"
+                        variant={showCalendar ? "secondary" : "outline"}
                         onClick={() => setShowCalendar(!showCalendar)}
-                        title="Toggle Calendar View"
+                        title="Toggle Calendar/List View"
                     >
-                        {showCalendar ? <Filter className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+                        {showCalendar ? <Filter className="h-4 w-4 mr-2" /> : <CalendarIcon className="h-4 w-4 mr-2" />}
+                        {showCalendar ? "List View" : "Calendar View"}
+                    </Button>
+                    <Button
+                        onClick={() => setTimerOpen(true)}
+                        className="hidden md:flex"
+                        variant="outline"
+                    >
+                        <Play className="mr-2 h-4 w-4 text-green-600" />
+                        Study Timer
                     </Button>
                     <Button
                         onClick={() => setAiOpen(true)}
@@ -391,6 +395,8 @@ export function StudyPlanner() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <TimerDialog open={timerOpen} onOpenChange={setTimerOpen} />
             <Dialog open={aiOpen} onOpenChange={setAiOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -799,6 +805,66 @@ export function StudyPlanner() {
         </div >
     )
 }
+
+const TimerDialog = memo(({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) => {
+    const [timeLeft, setTimeLeft] = useState(25 * 60)
+    const [isRunning, setIsRunning] = useState(false)
+
+    useEffect(() => {
+        let timer: any
+        if (isRunning && timeLeft > 0) {
+            timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000)
+        } else if (timeLeft === 0) {
+            setIsRunning(false)
+            if (isRunning) toast.success("Timer completed! Take a break.")
+        }
+        return () => clearInterval(timer)
+    }, [isRunning, timeLeft])
+
+    const formatTime = (seconds: number) => {
+        const m = Math.floor(seconds / 60)
+        const s = seconds % 60
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="text-center text-2xl font-bold">Study Timer</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col items-center justify-center py-8">
+                    <div className="text-7xl font-mono font-bold mb-8 tracking-tighter text-slate-800">
+                        {formatTime(timeLeft)}
+                    </div>
+                    <div className="flex gap-4">
+                        <Button 
+                            variant={isRunning ? "destructive" : "default"} 
+                            size="lg" 
+                            className="w-32"
+                            onClick={() => setIsRunning(!isRunning)}
+                        >
+                            {isRunning ? "Pause" : "Start"}
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="lg"
+                            onClick={() => { setIsRunning(false); setTimeLeft(25 * 60) }}
+                        >
+                            Reset
+                        </Button>
+                    </div>
+                    <div className="flex gap-2 mt-8">
+                        <Button variant="ghost" size="sm" onClick={() => { setIsRunning(false); setTimeLeft(15 * 60) }}>15m</Button>
+                        <Button variant="ghost" size="sm" onClick={() => { setIsRunning(false); setTimeLeft(25 * 60) }}>25m</Button>
+                        <Button variant="ghost" size="sm" onClick={() => { setIsRunning(false); setTimeLeft(45 * 60) }}>45m</Button>
+                        <Button variant="ghost" size="sm" onClick={() => { setIsRunning(false); setTimeLeft(60 * 60) }}>60m</Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+})
 
 // getDoc moved to top imports
 

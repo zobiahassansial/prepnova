@@ -50,7 +50,9 @@ export interface ResumeData {
     id?: string
     userId: string
     title: string
-    template: "basic" | "modern" | "classic" | "minimal" | "template_modern_pro" | "template_sidebar" | "template_minimal_elegant" | "template_creative_blocks"
+    template: string // Using string to support the 16 new template IDs flexibly
+    activeTemplateId?: string
+    customTemplateHtml?: string
     personalInfo: PersonalInfo
     summary: string
     experience: ExperienceItem[]
@@ -60,7 +62,7 @@ export interface ResumeData {
     sections: ResumeSection[] // Order of sections
     includeCover?: boolean
     coverLetter?: string
-    coverTemplate?: "basic" | "modern" | "classic" | "minimal" | "template_modern_pro" | "template_sidebar" | "template_minimal_elegant" | "template_creative_blocks"
+    coverTemplate?: string
     resumeTone?: "professional" | "formal" | "minimal"
 
     createdAt?: any

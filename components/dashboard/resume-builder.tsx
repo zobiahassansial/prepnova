@@ -21,6 +21,9 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { TemplateGallery } from "./template-gallery"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Code } from "lucide-react"
 
 function usePageCount(ref: React.RefObject<HTMLDivElement>) {
     const [pages, setPages] = useState(1)
@@ -151,17 +154,7 @@ export function ResumeBuilder() {
             await incrementQuota(user.uid, "resume")
 
             // 3. Log Activity
-            await logActivity(user.uid, "resume_created", { title: resumeData.title })
-
-            // 4. Log to activityLog for dashboard feed
-            try {
-                await addDoc(collection(db, "users", user.uid, "activityLog"), {
-                    type: "resume_saved",
-                    description: `Saved resume: "${resumeData.title}"`,
-                    icon: "📄",
-                    timestamp: Timestamp.now(),
-                })
-            } catch { /* non-critical */ }
+            await logActivity(user.uid, "resume_created", `Saved resume: "${resumeData.title}"`)
 
             toast.success("Resume saved successfully!")
         } catch (error: any) {
@@ -217,6 +210,34 @@ export function ResumeBuilder() {
                                 />
                             </PopoverContent>
                         </Popover>
+
+                        {/* Custom HTML Dialog */}
+                        {resumeData.template === "custom" && (
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 bg-slate-900 text-white hover:bg-slate-800 hover:text-white">
+                                        <Code className="mr-2 h-3 w-3" />
+                                        Edit HTML
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="w-[800px] max-w-[90vw]">
+                                    <DialogHeader>
+                                        <DialogTitle>Edit Custom Resume HTML</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="py-4">
+                                        <p className="text-sm text-muted-foreground mb-4">
+                                            Use variables like <code>{`{{fullName}}`}</code>, <code>{`{{email}}`}</code>, <code>{`{{phone}}`}</code>, and <code>{`{{summary}}`}</code>.
+                                        </p>
+                                        <Textarea
+                                            className="font-mono h-[400px]"
+                                            value={resumeData.customTemplateHtml || ""}
+                                            onChange={(e) => setResumeData(prev => ({ ...prev, customTemplateHtml: e.target.value }))}
+                                            placeholder="<html>...</html>"
+                                        />
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+                        )}
 
                         {/* Cover Letter Templates Popover */}
                         {resumeData.includeCover && (

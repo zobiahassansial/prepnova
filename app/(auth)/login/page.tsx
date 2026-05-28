@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { toast } from "sonner"
 import { Brain, Loader2, Eye, EyeOff } from "lucide-react"
-import { signInWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup } from "firebase/auth"
+import { signInWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth"
 import { auth, db } from "@/lib/firebase"
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
 
@@ -30,6 +30,9 @@ function LoginContent() {
 
     const [loading, setLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+    const [showReset, setShowReset] = useState(false)
+    const [resetEmail, setResetEmail] = useState("")
 
     useEffect(() => {
         if (status === 'authenticated') {
@@ -37,7 +40,67 @@ function LoginContent() {
         }
     }, [status, router, callbackUrl])
 
+    useEffect(() => {
+        let mounted = true;
+        const checkRedirect = async () => {
+            try {
+                const result = await getRedirectResult(auth);
+                if (result?.user && mounted) {
+                    setIsGoogleLoading(true);
+                    await handleGoogleUser(result.user);
+                }
+            } catch (error: any) {
+                if (mounted) {
+                    console.error("Redirect error:", error);
+                    toast.error("Google Login failed after redirect.");
+                    setIsGoogleLoading(false);
+                }
+            }
+        };
+        checkRedirect();
+        return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
+    const handleGoogleUser = async (user: any) => {
+        try {
+            const idToken = await user.getIdToken()
+            console.log("[Login] Google ID Token obtained, syncing session...", { idTokenLength: idToken.length });
+            
+            const signInResult = await import("next-auth/react").then(mod =>
+                mod.signIn("credentials", {
+                    idToken,
+                    redirect: false,
+                })
+            )
+            console.log("[Login] Google signIn result:", signInResult);
+
+            if (signInResult?.error) {
+                toast.error("Failed to create session.")
+                setIsGoogleLoading(false)
+                return
+            }
+
+            const userRef = doc(db, "users", user.uid)
+            const snap = await getDoc(userRef)
+
+            toast.success("Logged in with Google!")
+
+            if (!snap.exists() || !snap.data()?.onboardingCompleted) {
+                if (!snap.exists() || !snap.data()?.username) {
+                    router.push("/onboarding/username")
+                    return
+                }
+                router.push("/onboarding")
+            } else {
+                router.push(callbackUrl)
+            }
+        } catch (err) {
+            console.error("Error in handleGoogleUser:", err);
+            toast.error("An error occurred during Google login.")
+            setIsGoogleLoading(false)
+        }
+    }
 
     const form = useForm<z.infer<typeof LoginSchema>>({
         resolver: zodResolver(LoginSchema),
@@ -108,7 +171,7 @@ function LoginContent() {
     }
 
     const handleForgotPassword = async () => {
-        const identifier = form.getValues("identifier")
+        const identifier = resetEmail || form.getValues("identifier")
         const isEmail = z.string().email().safeParse(identifier).success
 
         if (!identifier || !isEmail) {
@@ -117,68 +180,40 @@ function LoginContent() {
         }
 
         try {
+            setLoading(true)
             await sendPasswordResetEmail(auth, identifier)
             toast.success("Password reset email sent! Check your inbox.")
+            setShowReset(false)
         } catch (error) {
             toast.error("Failed to send reset email.")
+        } finally {
+            setLoading(false)
         }
     }
     const handleGoogleLogin = async () => {
+        if (isGoogleLoading) return;
+        setIsGoogleLoading(true);
         try {
             const provider = new GoogleAuthProvider()
             const result = await signInWithPopup(auth, provider)
-            const user = result.user
-
-            // 1. Get ID Token
-            const idToken = await user.getIdToken()
-
-            // 2. Sync with NextAuth Session
-            console.log("[Login] Google ID Token obtained, syncing session...", { idTokenLength: idToken.length });
-            // We use redirect: false to prevent NextAuth from redirecting automatically, 
-            // allowing us to control the flow and wait for the session to be established.
-            const signInResult = await import("next-auth/react").then(mod =>
-                mod.signIn("credentials", {
-                    idToken,
-                    redirect: false,
-                })
-            )
-            console.log("[Login] Google signIn result:", signInResult);
-
-            if (signInResult?.error) {
-                toast.error("Failed to create session.")
-                return
-            }
-
-            // 3. User & Onboarding Check
-            const userRef = doc(db, "users", user.uid)
-            const snap = await getDoc(userRef)
-
-            toast.success("Logged in with Google!")
-
-            if (!snap.exists() || !snap.data()?.onboardingCompleted) {
-                // Check if username exists (Step 5)
-                if (!snap.exists() || !snap.data()?.username) {
-                    router.push("/onboarding/username")
-                    return
-                }
-                router.push("/onboarding")
-            } else {
-                router.push(callbackUrl)
-            }
-            // Ensure we don't return before redirect happens
-            return
-
+            await handleGoogleUser(result.user)
         } catch (error: any) {
             console.error(error)
             if (error.code === 'auth/operation-not-allowed') {
                 toast.error("Google Sign-In is not enabled in Firebase Console.")
+                setIsGoogleLoading(false)
             } else if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-                // User closed popup or clicked multiple times, just ignore
                 console.log("Sign-in cancelled by user")
+                toast.error("Google sign-in was cancelled.")
+                setIsGoogleLoading(false)
             } else if (error.code === 'auth/popup-blocked') {
-                toast.error("Popup blocked. Please allow popups for this site.")
+                toast.error("Popup blocked. Redirecting to login...")
+                const provider = new GoogleAuthProvider()
+                await signInWithRedirect(auth, provider)
+                // Do not set isGoogleLoading(false) here because page is redirecting
             } else {
                 toast.error("Google Login failed. Check console for details.")
+                setIsGoogleLoading(false)
             }
         }
     }
@@ -200,11 +235,32 @@ function LoginContent() {
                             <Brain className="h-8 w-8 text-primary" />
                         </div>
                     </div>
-                    <CardTitle className="text-2xl">Welcome back</CardTitle>
-                    <CardDescription>Login to your PrepNova account</CardDescription>
+                    <CardTitle className="text-2xl">{showReset ? "Reset Password" : "Welcome back"}</CardTitle>
+                    <CardDescription>{showReset ? "Enter your email to receive a reset link" : "Login to your PrepNova account"}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    {showReset ? (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Email Address</label>
+                                <input
+                                    type="email"
+                                    value={resetEmail}
+                                    onChange={(e) => setResetEmail(e.target.value)}
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    placeholder="student@example.com"
+                                />
+                            </div>
+                            <Button className="w-full" onClick={handleForgotPassword} disabled={loading}>
+                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Send Reset Link
+                            </Button>
+                            <Button variant="ghost" className="w-full" onClick={() => setShowReset(false)} disabled={loading}>
+                                Back to Login
+                            </Button>
+                        </div>
+                    ) : (
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Email or Username</label>
                             <input
@@ -219,7 +275,10 @@ function LoginContent() {
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <label className="text-sm font-medium">Password</label>
-                                <button type="button" onClick={handleForgotPassword} className="text-sm text-primary hover:underline">Forgot password?</button>
+                                <button type="button" onClick={() => {
+                                    setResetEmail(form.getValues("identifier"))
+                                    setShowReset(true)
+                                }} className="text-sm text-primary hover:underline">Forgot password?</button>
                             </div>
                             <div className="relative">
                                 <input
@@ -240,7 +299,7 @@ function LoginContent() {
                                 <p className="text-sm text-red-500">{form.formState.errors.password.message}</p>
                             )}
                         </div>
-                        <Button className="w-full" type="submit" disabled={loading}>
+                        <Button className="w-full" type="submit" disabled={loading || isGoogleLoading}>
                             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Sign In
                         </Button>
@@ -254,17 +313,22 @@ function LoginContent() {
                             </div>
                         </div>
 
-                        <Button variant="outline" type="button" className="w-full" onClick={handleGoogleLogin}>
-                            <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path></svg>
+                        <Button variant="outline" type="button" className="w-full" onClick={handleGoogleLogin} disabled={loading || isGoogleLoading}>
+                            {isGoogleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (
+                                <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path></svg>
+                            )}
                             Google
                         </Button>
                     </form>
+                    )}
                 </CardContent>
-                <CardFooter className="flex justify-center">
-                    <p className="text-sm text-muted-foreground">
-                        Don't have an account? <Link href="/signup" className="text-primary hover:underline">Sign up</Link>
-                    </p>
-                </CardFooter>
+                {!showReset && (
+                    <CardFooter className="flex justify-center">
+                        <p className="text-sm text-muted-foreground">
+                            Don't have an account? <Link href="/signup" className="text-primary hover:underline">Sign up</Link>
+                        </p>
+                    </CardFooter>
+                )}
             </Card>
         </div>
     )

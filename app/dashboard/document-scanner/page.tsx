@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Camera, Upload, FileType, Loader2, Copy, Check, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
+import { MergePdfDialog } from "@/components/dashboard/merge-pdf-dialog"
+import { logActivity } from "@/lib/logger"
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
 const MAX_SIZE = 10 * 1024 * 1024 // 10MB
@@ -24,6 +26,7 @@ export default function DocumentScannerPage() {
     const [uploadProgress, setUploadProgress] = useState(0)
     const [errorMsg, setErrorMsg] = useState<string>("")
     const [copied, setCopied] = useState(false)
+    const [mergeOpen, setMergeOpen] = useState(false)
 
     const resetState = () => {
         setImageSrc(null)
@@ -104,12 +107,7 @@ export default function DocumentScannerPage() {
             setScanState("done")
 
             // Log activity
-            await addDoc(collection(db, "users", user.uid, "activityLog"), {
-                type: "doc_scanned",
-                description: `Scanned document: "${file.name}"`,
-                icon: "🔍",
-                timestamp: Timestamp.now(),
-            })
+            await logActivity(user.uid, "doc_scanned", `Scanned document: "${file.name}"`)
 
             toast.success("Text extracted successfully!")
         } catch (err: any) {
@@ -254,9 +252,8 @@ export default function DocumentScannerPage() {
                         </Button>
                         <Button
                             variant="outline"
-                            className="h-16 flex flex-col gap-1 opacity-60 cursor-not-allowed"
-                            disabled
-                            title="Coming soon"
+                            className="h-16 flex flex-col gap-1 hover:text-primary hover:border-primary/50"
+                            onClick={() => setMergeOpen(true)}
                         >
                             <FileType className="h-5 w-5" />
                             <span className="text-xs">Merge PDFs</span>
@@ -311,6 +308,7 @@ export default function DocumentScannerPage() {
                     </CardContent>
                 </Card>
             </div>
+            <MergePdfDialog open={mergeOpen} onOpenChange={setMergeOpen} />
         </div>
     )
 }

@@ -50,6 +50,10 @@ interface UserPlanState {
     canAccess: (feature: keyof PlanLimits) => boolean
     isAtLimit: (feature: "resumes" | "summaries" | "flashcards") => boolean
     upgradeRequired: (feature: keyof PlanLimits) => boolean
+    subscriptionStatus?: string
+    isPremium?: boolean
+    isPro?: boolean
+    canUseAI?: boolean
 }
 
 export function useUserPlan(): UserPlanState {
@@ -117,33 +121,47 @@ export function useUserPlan(): UserPlanState {
         }
     }, [user])
 
-    const limits = PLAN_LIMITS[plan]
+    const isBypass = process.env.NODE_ENV === "development"
+
+    if (isBypass) {
+        console.log("DEV MODE: premium access enabled for current user")
+    }
+
+    const currentPlan = isBypass ? "pro" : plan
+    const currentLimits = PLAN_LIMITS[currentPlan]
 
     const canAccess = (feature: keyof PlanLimits): boolean => {
-        const val = limits[feature]
+        if (isBypass) return true
+        const val = currentLimits[feature]
         if (typeof val === "boolean") return val
         if (typeof val === "number") return val > 0
         return val === "full"
     }
 
     const isAtLimit = (feature: "resumes" | "summaries" | "flashcards"): boolean => {
+        if (isBypass) return false
         const used = usage[feature] ?? 0
-        const limit = limits[feature] as number
+        const limit = currentLimits[feature] as number
         return used >= limit
     }
 
     const upgradeRequired = (feature: keyof PlanLimits): boolean => {
+        if (isBypass) return false
         return !canAccess(feature)
     }
 
     return {
-        plan,
-        limits,
+        plan: currentPlan,
+        limits: currentLimits,
         usage,
         subscription,
-        loading,
+        loading: isBypass ? false : loading, // Force loading to false in bypass so UI doesn't block
         canAccess,
         isAtLimit,
         upgradeRequired,
+        subscriptionStatus: isBypass ? "active" : undefined,
+        isPremium: isBypass ? true : undefined,
+        isPro: isBypass ? true : undefined,
+        canUseAI: isBypass ? true : undefined,
     }
 }

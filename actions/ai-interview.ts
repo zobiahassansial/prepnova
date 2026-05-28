@@ -1,8 +1,8 @@
 "use server"
 
-import { getGeminiModel } from "@/lib/gemini"
+import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
-const model = getGeminiModel()
+const model = getGroqModel()
 
 export async function getLiveInterviewHelp(transcript: string) {
     if (!transcript) return { error: "No text detected" }
@@ -17,8 +17,11 @@ export async function getLiveInterviewHelp(transcript: string) {
             - Direct answer only. No intro/outro.
         `
 
-        const result = await model.generateContent(prompt)
-        const answer = result.response.text()
+        const result = await model.chat.completions.create({
+            model: GROQ_MODEL,
+            messages: [{ role: "user", content: prompt }]
+        });
+        const answer = result.choices[0]?.message?.content || "";
 
         return { success: true, answer }
     } catch (error) {
@@ -29,25 +32,23 @@ export async function getLiveInterviewHelp(transcript: string) {
 // ... (Baaki Mock Interview code same rahega) ...
 export async function generateInterviewResponse(messages: { role: string, content: string }[]) {
     try {
-        const history = messages.map(m => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }]
-        }))
-
         const systemInstruction = `
             You are a professional HR interviewer. Ask ONE question at a time.
         `
 
-        const lastMessage = messages[messages.length - 1].content;
-        const historyWithoutLast = history.slice(0, -1);
+        const groqMessages = [
+            { role: "system", content: systemInstruction },
+            ...messages.map(m => ({
+                role: m.role === "model" ? "assistant" : m.role,
+                content: m.content
+            }))
+        ];
 
-        const chatSession = model.startChat({
-            history: historyWithoutLast,
-            systemInstruction: { role: "system", parts: [{ text: systemInstruction }] } as any
+        const result = await model.chat.completions.create({
+            model: GROQ_MODEL,
+            messages: groqMessages as any
         });
-
-        const result = await chatSession.sendMessage(lastMessage);
-        const reply = result.response.text();
+        const reply = result.choices[0]?.message?.content || "";
 
         return { reply }
 

@@ -1,14 +1,13 @@
 "use server"
 
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 import { ResumeData } from "@/types/resume"
-import { getGeminiModel } from "@/lib/gemini"
 
 // Removed local genAI initialization to use shared config
 
 
 export async function generateResumeContent(currentData: ResumeData, tone?: string): Promise<Partial<ResumeData>> {
-    const model = getGeminiModel()
+    const model = getGroqModel()
 
     const prompt = `
     You are an expert resume writer.
@@ -36,9 +35,11 @@ export async function generateResumeContent(currentData: ResumeData, tone?: stri
     `
 
     try {
-        const result = await model.generateContent(prompt)
-        const response = await result.response
-        const text = response.text()
+        const result = await model.chat.completions.create({
+            model: GROQ_MODEL,
+            messages: [{ role: "user", content: prompt }]
+        });
+        const text = result.choices[0]?.message?.content || "";
 
         // Clean markdown if present
         const jsonStr = text.replace(/^```json\s*/, "").replace(/\s*```$/, "")
@@ -52,7 +53,7 @@ export async function generateResumeContent(currentData: ResumeData, tone?: stri
 }
 
 export async function optimizeCoverLetter(coverLetter: string, resumeData: ResumeData, tone?: string): Promise<string> {
-    const model = getGeminiModel()
+    const model = getGroqModel()
 
     const prompt = `
     You are a professional career assistant.
@@ -76,9 +77,11 @@ export async function optimizeCoverLetter(coverLetter: string, resumeData: Resum
     `
 
     try {
-        const result = await model.generateContent(prompt)
-        const response = await result.response
-        return response.text()
+        const result = await model.chat.completions.create({
+            model: GROQ_MODEL,
+            messages: [{ role: "user", content: prompt }]
+        });
+        return result.choices[0]?.message?.content || "";
     } catch (error) {
         console.error("Cover Letter Optimization Failed:", error)
         throw new Error("Failed to optimize cover letter")
@@ -86,7 +89,7 @@ export async function optimizeCoverLetter(coverLetter: string, resumeData: Resum
 }
 
 export async function generateCoverLetter(resumeData: ResumeData, tone?: string): Promise<string> {
-    const model = getGeminiModel()
+    const model = getGroqModel()
 
     const prompt = `
     Write a professional cover letter from scratch.
@@ -106,8 +109,11 @@ export async function generateCoverLetter(resumeData: ResumeData, tone?: string)
     `
 
     try {
-        const result = await model.generateContent(prompt)
-        return result.response.text()
+        const result = await model.chat.completions.create({
+            model: GROQ_MODEL,
+            messages: [{ role: "user", content: prompt }]
+        });
+        return result.choices[0]?.message?.content || "";
     } catch (error) {
         console.error("Generate Cover Letter Failed:", error)
         throw new Error("Failed to generate cover letter")
@@ -115,7 +121,7 @@ export async function generateCoverLetter(resumeData: ResumeData, tone?: string)
 }
 
 export async function matchCoverLetterToJob(coverLetter: string, jobDescription: string, resumeData: ResumeData, tone?: string): Promise<string> {
-    const model = getGeminiModel()
+    const model = getGroqModel()
 
     const prompt = `
     Rewrite this cover letter to closely match the following job description.
@@ -140,8 +146,11 @@ export async function matchCoverLetterToJob(coverLetter: string, jobDescription:
     `
 
     try {
-        const result = await model.generateContent(prompt)
-        return result.response.text()
+        const result = await model.chat.completions.create({
+            model: GROQ_MODEL,
+            messages: [{ role: "user", content: prompt }]
+        });
+        return result.choices[0]?.message?.content || "";
     } catch (error) {
         console.error("Match Cover Letter Failed:", error)
         throw new Error("Failed to match cover letter")

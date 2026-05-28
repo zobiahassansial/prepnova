@@ -258,8 +258,8 @@ export default function NoteSummarizerPage() {
                                 {!canSummarize
                                     ? `Upgrade to get more summaries`
                                     : selectedFile
-                                    ? "Click 'Summarize' to start"
-                                    : "PDF, DOCX, or TXT · Max 10MB"}
+                                        ? "Click 'Summarize' to start"
+                                        : "PDF, DOCX, or TXT · Max 10MB"}
                             </p>
                         </div>
                     </div>
