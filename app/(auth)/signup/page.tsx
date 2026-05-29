@@ -11,8 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { toast } from "sonner"
 import { Brain, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth"
-import { doc, setDoc } from "firebase/firestore"
+import { doc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useSession } from "next-auth/react"
 
 const SignupSchema = z.object({
@@ -137,26 +139,28 @@ export default function SignupPage() {
                 uid: user.uid,
                 name: values.name,
                 username: values.username.toLowerCase(),
-                email: values.email,
+                email: values.email.trim().toLowerCase(),
+                displayName: values.name,
                 emailVerified: false,
-                onboardingCompleted: false,
-                createdAt: new Date(),
+                onboardingCompleted: true,
+                createdAt: serverTimestamp(),
                 userType,
                 // Student fields
-                degree: userType === 'student' ? degree : '',
-                gradeYear: userType === 'student' ? gradeYear : '',
-                subjects: userType === 'student' ? subjects : '',
+                degree: userType === 'student' ? (degree || null) : null,
+                gradeYear: userType === 'student' ? (gradeYear || null) : null,
+                subjects: userType === 'student' ? subjects.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
                 // Professional fields
-                profession: userType === 'professional' ? profession : '',
-                industry: userType === 'professional' ? industry : '',
+                profession: userType === 'professional' ? (profession || null) : null,
+                industry: userType === 'professional' ? (industry || null) : null,
                 educationLevel: userType === 'student' ? 'Student' : 'Professional',
+                role: userType === 'student' ? 'Student' : 'Professional',
                 plan: "free",
                 streak: 0,
                 resumeCount: 0,
                 summaryCount: 0,
                 flashcardCount: 0,
                 monthlyResetAt: new Date(new Date().setMonth(new Date().getMonth() + 1))
-            })
+            }, { merge: true })
 
             toast.success("Account created! Verify your email before logging in.")
             router.push("/login")
@@ -351,53 +355,98 @@ export default function SignupPage() {
 
                             {userType === 'student' ? (
                                 <>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Degree / Program</label>
-                                        <input
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="degree">Degree / Program</Label>
+                                        <select
+                                            id="degree"
                                             value={degree}
                                             onChange={e => setDegree(e.target.value)}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                            placeholder="e.g. BSc Computer Science"
-                                        />
+                                            className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <option value="">Select your degree</option>
+                                            <option value="Computer Science">Computer Science</option>
+                                            <option value="Software Engineering">Software Engineering</option>
+                                            <option value="Medicine / MBBS">Medicine / MBBS</option>
+                                            <option value="Business Administration">Business Administration</option>
+                                            <option value="Electrical Engineering">Electrical Engineering</option>
+                                            <option value="Mechanical Engineering">Mechanical Engineering</option>
+                                            <option value="Civil Engineering">Civil Engineering</option>
+                                            <option value="Law / LLB">Law / LLB</option>
+                                            <option value="Psychology">Psychology</option>
+                                            <option value="Economics">Economics</option>
+                                            <option value="Mathematics">Mathematics</option>
+                                            <option value="Physics">Physics</option>
+                                            <option value="Chemistry">Chemistry</option>
+                                            <option value="Biology / Biosciences">Biology / Biosciences</option>
+                                            <option value="Arts / Design">Arts / Design</option>
+                                            <option value="Mass Communication">Mass Communication</option>
+                                            <option value="High School">High School</option>
+                                            <option value="Other">Other</option>
+                                        </select>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Year / Grade</label>
-                                        <input
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="grade">Year / Grade</Label>
+                                        <select
+                                            id="grade"
                                             value={gradeYear}
                                             onChange={e => setGradeYear(e.target.value)}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                            placeholder="e.g. Year 2, Grade 10"
-                                        />
+                                            className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <option value="">Select your year</option>
+                                            <option value="High School Grade 9">High School — Grade 9</option>
+                                            <option value="High School Grade 10">High School — Grade 10</option>
+                                            <option value="High School Grade 11">High School — Grade 11 / O-Levels</option>
+                                            <option value="High School Grade 12">High School — Grade 12 / A-Levels</option>
+                                            <option value="Year 1">University — Year 1</option>
+                                            <option value="Year 2">University — Year 2</option>
+                                            <option value="Year 3">University — Year 3</option>
+                                            <option value="Year 4">University — Year 4</option>
+                                            <option value="Masters">Masters</option>
+                                            <option value="PhD">PhD / Doctorate</option>
+                                        </select>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Main Subjects (optional)</label>
-                                        <input
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="subjects">Main Subjects <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                                        <Input
+                                            id="subjects"
+                                            placeholder="e.g. Calculus, OOP, Anatomy"
                                             value={subjects}
                                             onChange={e => setSubjects(e.target.value)}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                            placeholder="e.g. Math, Physics, Chemistry"
                                         />
+                                        <p className="text-xs text-muted-foreground">Comma separated</p>
                                     </div>
                                 </>
                             ) : (
                                 <>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Profession / Job Title</label>
-                                        <input
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="profession">Job Title / Profession</Label>
+                                        <Input
+                                            id="profession"
+                                            placeholder="e.g. Software Engineer, Doctor, Accountant"
                                             value={profession}
                                             onChange={e => setProfession(e.target.value)}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                            placeholder="e.g. Software Engineer"
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Industry</label>
-                                        <input
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="industry">Industry</Label>
+                                        <select
+                                            id="industry"
                                             value={industry}
                                             onChange={e => setIndustry(e.target.value)}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                            placeholder="e.g. Technology, Finance, Healthcare"
-                                        />
+                                            className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <option value="">Select industry</option>
+                                            <option value="Technology">Technology / IT</option>
+                                            <option value="Healthcare">Healthcare / Medicine</option>
+                                            <option value="Finance">Finance / Banking</option>
+                                            <option value="Education">Education / Teaching</option>
+                                            <option value="Engineering">Engineering</option>
+                                            <option value="Marketing">Marketing / Advertising</option>
+                                            <option value="Law">Law / Legal</option>
+                                            <option value="Design">Design / Creative</option>
+                                            <option value="Business">Business / Management</option>
+                                            <option value="Other">Other</option>
+                                        </select>
                                     </div>
                                 </>
                             )}

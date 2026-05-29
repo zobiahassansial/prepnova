@@ -534,60 +534,77 @@ export function SettingsForm() {
 
             {/* ─── SECURITY TAB ──────────────────────────────────────────────────── */}
             <TabsContent value="security" className="space-y-6">
-                {/* Change Password */}
+                {/* Password & Security */}
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5" /> Change Password</CardTitle>
-                        <CardDescription>Requires your current password for verification.</CardDescription>
+                        <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5" /> Password &amp; Security</CardTitle>
+                        <CardDescription>Manage your password and account access.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Current Password</Label>
-                            <Input
-                                type="password"
-                                placeholder="Enter current password"
-                                value={passwords.current}
-                                onChange={e => setPasswords({ ...passwords, current: e.target.value })}
-                            />
+                        <div className="flex gap-3 flex-wrap">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => { setShowChangePassword(!showChangePassword); setPasswordMsg(null) }}
+                            >
+                                {showChangePassword ? 'Cancel' : 'Change Password'}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleSendResetEmail}
+                                disabled={passwordLoading}
+                            >
+                                Send Reset Email
+                            </Button>
                         </div>
-                        <div className="space-y-2">
-                            <Label>New Password</Label>
-                            <Input
-                                type="password"
-                                placeholder="At least 6 characters"
-                                value={passwords.new}
-                                onChange={e => setPasswords({ ...passwords, new: e.target.value })}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Confirm New Password</Label>
-                            <Input
-                                type="password"
-                                placeholder="Repeat new password"
-                                value={passwords.confirm}
-                                onChange={e => setPasswords({ ...passwords, confirm: e.target.value })}
-                            />
-                        </div>
+
+                        {showChangePassword && (
+                            <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
+                                <div className="space-y-2">
+                                    <Label>Current Password</Label>
+                                    <Input
+                                        type="password"
+                                        placeholder="Enter current password"
+                                        value={currentPassword}
+                                        onChange={e => setCurrentPassword(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>New Password</Label>
+                                    <Input
+                                        type="password"
+                                        placeholder="At least 6 characters"
+                                        value={newPassword}
+                                        onChange={e => setNewPassword(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Confirm New Password</Label>
+                                    <Input
+                                        type="password"
+                                        placeholder="Repeat new password"
+                                        value={confirmPassword}
+                                        onChange={e => setConfirmPassword(e.target.value)}
+                                    />
+                                </div>
+                                <Button
+                                    onClick={handleChangePassword}
+                                    disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+                                    className="w-full"
+                                >
+                                    {passwordLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Update Password
+                                </Button>
+                            </div>
+                        )}
+
+                        {passwordMsg && (
+                            <p className={`text-xs font-medium ${passwordMsg.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+                                {passwordMsg.type === 'success' ? '✓ ' : '⚠ '}{passwordMsg.text}
+                            </p>
+                        )}
                     </CardContent>
-                    <CardFooter className="border-t pt-4 flex flex-wrap gap-3">
-                        <Button
-                            onClick={handlePassChange}
-                            disabled={loading || !passwords.current || !passwords.new || !passwords.confirm}
-                        >
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Update Password
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleSendResetEmail}
-                            disabled={loading}
-                        >
-                            Send Reset Email
-                        </Button>
-                        {resetEmailSent && <p className="text-green-600 text-xs self-center">✓ Reset email sent to {auth.currentUser?.email}</p>}
-                        {resetEmailError && <p className="text-red-500 text-xs self-center">{resetEmailError}</p>}
-                    </CardFooter>
                 </Card>
 
                 {/* Active Sessions */}
