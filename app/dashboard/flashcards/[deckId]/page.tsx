@@ -4,9 +4,10 @@ import { useState, useEffect, use } from "react"
 import { useAuth } from "@/components/providers/auth-provider"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore"
+import { logActivity } from "@/lib/logger"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Edit2, Trophy, HelpCircle, Lightbulb, Hand } from "lucide-react"
+import { ArrowLeft, Edit2, Trophy, HelpCircle, Lightbulb, Hand, ChevronRight, ChevronLeft } from "lucide-react"
 import { toast } from "sonner"
 import { Flashcard, calculateNextReview } from "@/lib/flashcard-logic"
 import ReactConfetti from 'react-confetti'
@@ -42,7 +43,7 @@ export default function StudySessionPage({ params }: { params: Promise<{ deckId:
   useEffect(() => {
     async function fetchDeck() {
       if (!user) return
-      const docSnap = await getDoc(doc(db, "users", user.uid, "flashcard_decks", deckId))
+      const docSnap = await getDoc(doc(db, "users", user.uid, "flashcardDecks", deckId))
       if (docSnap.exists()) {
         const data = docSnap.data()
         setDeck(data)
@@ -59,7 +60,7 @@ export default function StudySessionPage({ params }: { params: Promise<{ deckId:
     
     const newAllCards = deck.cards.map((c: Flashcard) => c.id === currentCard.id ? updatedCard : c)
     setDeck({ ...deck, cards: newAllCards }) 
-    updateDoc(doc(db, "users", user!.uid, "flashcard_decks", deckId), { cards: newAllCards, lastStudied: Timestamp.now() })
+    updateDoc(doc(db, "users", user!.uid, "flashcardDecks", deckId), { cards: newAllCards, lastStudied: Timestamp.now() })
 
     if (rating === 1) {
         setStudyQueue(prev => [...prev, updatedCard])
@@ -75,9 +76,28 @@ export default function StudySessionPage({ params }: { params: Promise<{ deckId:
                  setCurrentIndex(prev => prev + 1)
              } else {
                  setIsFinished(true)
+                 if (user) logActivity(user.uid, "deck_reviewed", `Reviewed flashcard deck: "${deck?.title || "Untitled"}"`)
              }
         }
     }, 300)
+  }
+
+  const handleSkip = () => {
+    setIsFlipped(false)
+    setTimeout(() => {
+      if (currentIndex < studyQueue.length - 1) {
+        setCurrentIndex(prev => prev + 1)
+      } else {
+        setIsFinished(true)
+        if (user) logActivity(user.uid, "deck_reviewed", `Reviewed flashcard deck: "${deck?.title || "Untitled"}"`)
+      }
+    }, 200)
+  }
+
+  const handleBack = () => {
+    if (currentIndex === 0) return
+    setIsFlipped(false)
+    setTimeout(() => setCurrentIndex(prev => prev - 1), 200)
   }
 
   const openEdit = (e: React.MouseEvent) => {
@@ -96,7 +116,7 @@ export default function StudySessionPage({ params }: { params: Promise<{ deckId:
     setStudyQueue(newQueue)
     const newAllCards = deck.cards.map((c: Flashcard) => c.id === currentCard.id ? updatedCard : c)
     setDeck({ ...deck, cards: newAllCards })
-    updateDoc(doc(db, "users", user!.uid, "flashcard_decks", deckId), { cards: newAllCards })
+    updateDoc(doc(db, "users", user!.uid, "flashcardDecks", deckId), { cards: newAllCards })
     setIsEditing(false)
     toast.success("Card updated")
   }
@@ -216,13 +236,38 @@ export default function StudySessionPage({ params }: { params: Promise<{ deckId:
             </motion.div>
         </div>
 
-        {/* --- CONTROLS --- */}
-        <motion.div 
+        {/* --- BACK / NEXT NAVIGATION --- */}
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 flex items-center justify-center gap-3"
+        >
+            <Button
+                onClick={handleBack}
+                disabled={currentIndex === 0}
+                variant="outline"
+                className="px-6 h-11 rounded-xl bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all gap-2"
+            >
+                <ChevronLeft className="h-4 w-4" />
+                Back
+            </Button>
+            <Button
+                onClick={handleSkip}
+                variant="outline"
+                className="px-6 h-11 rounded-xl bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white hover:border-slate-500 transition-all gap-2"
+            >
+                Next
+                <ChevronRight className="h-4 w-4" />
+            </Button>
+        </motion.div>
+
+        {/* --- RATING CONTROLS (visible after flip) --- */}
+        <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: isFlipped ? 1 : 0, y: isFlipped ? 0 : 10, pointerEvents: isFlipped ? 'auto' : 'none' }}
-            className="mt-8 grid grid-cols-4 gap-3 w-full max-w-lg"
+            className="mt-3 grid grid-cols-4 gap-3 w-full max-w-lg"
         >
-            <Button 
+            <Button
                 onClick={() => handleRate(1)}
                 className="h-14 rounded-xl bg-slate-900/50 border border-red-500/20 hover:bg-red-500/10 hover:border-red-500/50 text-red-400 hover:text-red-300 flex flex-col gap-0.5 transition-all"
             >
@@ -230,7 +275,7 @@ export default function StudySessionPage({ params }: { params: Promise<{ deckId:
                 <span className="text-[9px] uppercase opacity-60">Fail</span>
             </Button>
 
-            <Button 
+            <Button
                 onClick={() => handleRate(2)}
                 className="h-14 rounded-xl bg-slate-900/50 border border-orange-500/20 hover:bg-orange-500/10 hover:border-orange-500/50 text-orange-400 hover:text-orange-300 flex flex-col gap-0.5 transition-all"
             >
@@ -238,7 +283,7 @@ export default function StudySessionPage({ params }: { params: Promise<{ deckId:
                 <span className="text-[9px] uppercase opacity-60">2d</span>
             </Button>
 
-            <Button 
+            <Button
                 onClick={() => handleRate(3)}
                 className="h-14 rounded-xl bg-slate-900/50 border border-blue-500/20 hover:bg-blue-500/10 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 flex flex-col gap-0.5 transition-all"
             >
@@ -246,7 +291,7 @@ export default function StudySessionPage({ params }: { params: Promise<{ deckId:
                 <span className="text-[9px] uppercase opacity-60">4d</span>
             </Button>
 
-            <Button 
+            <Button
                 onClick={() => handleRate(4)}
                 className="h-14 rounded-xl bg-slate-900/50 border border-emerald-500/20 hover:bg-emerald-500/10 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 flex flex-col gap-0.5 transition-all"
             >

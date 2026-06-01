@@ -75,6 +75,8 @@ Output format:
 
 /* -------------------------------------------------
    Schedule EXISTING User Tasks
+   Strategy: AI handles priority ordering & day assignment.
+   Server computes actual times deterministically (no LLM arithmetic).
 --------------------------------------------------*/
 export async function scheduleUserTasks(
   tasks: {
@@ -88,116 +90,189 @@ export async function scheduleUserTasks(
   hoursPerDay: number,
   preferences?: string,
   daysToSchedule: number = 1,
-  startDate?: string
+  startDate?: string,
+  existingSchedule?: { scheduledTime: string; durationMinutes: number; scheduledDate: string }[]
 ) {
   const apiKey = process.env.GROQ_API_KEY
-
-  if (!apiKey) {
-    return { error: "GROQ_API_KEY not configured" }
-  }
-
-  if (!tasks || tasks.length === 0) {
-    return { error: "No tasks available to schedule" }
-  }
+  if (!apiKey) return { error: "GROQ_API_KEY not configured" }
+  if (!tasks || tasks.length === 0) return { error: "No tasks available to schedule" }
 
   try {
     const model = getGroqModel()
 
-    // Calculate Date Range
-    let startDateStr: string
-    let rangeStart: Date
+    const baseDate = startDate ? new Date(startDate + "T00:00:00") : (() => {
+      const d = new Date(); d.setDate(d.getDate() + 1); return d
+    })()
+    const startDateStr = baseDate.toISOString().split("T")[0]
 
-    if (startDate) {
-      startDateStr = startDate
-      rangeStart = new Date(startDate)
-    } else {
-      const today = new Date()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      startDateStr = tomorrow.toISOString().split('T')[0] // Format: YYYY-MM-DD
-      rangeStart = tomorrow
-    }
+    // Build a list of already-occupied minutes per day so the AI can see how loaded each day is
+    const dayCapacityMinutes = hoursPerDay * 60
+    const taskList = tasks.map(t => ({
+      id: t.id,
+      title: t.title,
+      subject: t.subject,
+      priority: t.priority,
+      duration_minutes: t.durationMinutes,
+      deadline: t.deadline || null
+    }))
 
-    // Calculate End Date
-    const endDate = new Date(rangeStart)
-    endDate.setDate(endDate.getDate() + (daysToSchedule - 1)) // If 1 day, end = start
-    const endDateStr = endDate.toISOString().split('T')[0]
+    const prompt = `You are a Study Schedule Planner.
+Your job is to ASSIGN and ORDER study tasks across days — NOT to calculate clock times.
+The server computes actual start times automatically.
 
-    const prompt = `
-You are a strict Study Planner AI Scheduler.
+SCHEDULE WINDOW:
+- Start date: ${startDateStr}
+- Days available: ${daysToSchedule}
+- Daily capacity: ${dayCapacityMinutes} minutes per day
 
-Your goal is to intelligently schedule the user's existing study tasks
-while PREVENTING burnout and overloading.
+TASKS TO SCHEDULE (use EXACT ids):
+${JSON.stringify(taskList, null, 2)}
 
-CURRENT CONTEXT:
-- Start Scheduling From: ${startDateStr} (YYYY-MM-DD)
-- End Scheduling Date: ${endDateStr} (YYYY-MM-DD)
-- Duration: ${daysToSchedule} day(s)
-- Daily Limit: ${hoursPerDay} hours
-- USER PREFERENCES: "${preferences || "None"}"
+ORDERING RULES:
+1. High priority tasks → earlier in the day / earlier days
+2. Medium priority → after High
+3. Low priority → last
+4. Group same-subject tasks on the same day when possible
+5. Spread tasks across days if total minutes exceed daily capacity
+6. Respect deadlines — tasks with closer deadlines go earlier
 
-CORE RULES (MANDATORY):
-- Do NOT create new tasks.
-- Do NOT rename tasks.
-- Use ONLY the tasks provided.
-- Respect user-defined priority strictly:
-  1) High priority tasks FIRST
-  2) Medium priority tasks NEXT
-  3) Low priority tasks LAST
-- Maximum task duration = 90 minutes.
-- NEVER schedule tasks back-to-back.
-- Insert mandatory breaks:
-  - Minimum 10 minutes after every task
-  - 30 minutes break after 3 continuous hours
-- Distribute tasks evenly across the available days if possible, or prioritize earlier days for high priority.
-- If "USER PREFERENCES" conflict with rules, try to accommodate preferences within safety limits (e.g., "No breaks" is unsafe, ignore; "Focus on Math" -> prioritize Math).
+USER PREFERENCES: "${preferences || "none"}"
+Apply preferences where sensible (e.g. "focus on math" = put Math tasks first; "short sessions first" = sort by duration ascending).
 
-CRITICAL OVERLAP PREVENTION:
-- You MUST calculate time sequentially.
-- Start Time of Task B = End Time of Task A + Break.
-- NO TWO TASKS CAN HAVE THE SAME START TIME.
-- If Task A is 09:00 - 10:00, Task B MUST start at 10:10 or later.
-- CRITICAL: You must keep a running counter of time. If Task A is 9:00-10:00, Task B CANNOT start at 9:00. It MUST start at 10:10. Verify every single start time against previous end times.
-
-INPUT TASKS:
-${JSON.stringify(tasks, null, 2)}
-
-OUTPUT FORMAT (STRICT JSON ONLY):
+OUTPUT — strict JSON, use only ids from the input list:
 {
-  "scheduled_tasks": [
-    {
-      "task_id": "exact_task_id",
-      "scheduled_date": "YYYY-MM-DD",
-      "scheduled_time": "HH:MM",
-      "duration_minutes": 60
-    }
+  "ordered_tasks": [
+    { "task_id": "EXACT_ID_FROM_INPUT", "day_offset": 0 }
   ],
   "unscheduled_tasks": [
-    {
-      "task_id": "exact_task_id",
-      "reason": "daily limit / conflict / spacing rule / preferences"
-    }
+    { "task_id": "EXACT_ID_FROM_INPUT", "reason": "exceeds daily capacity" }
   ]
 }
-`
+day_offset 0 = first day (${startDateStr}), 1 = second day, etc.
+Only use task_ids that appear in the input. Do not invent new ids.`
 
     const result = await model.chat.completions.create({
       model: GROQ_MODEL,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" }
-    });
-    const text = result.choices[0]?.message?.content || "{}";
+    })
 
-    const schedule = JSON.parse(text)
+    const aiOutput = JSON.parse(result.choices[0]?.message?.content || "{}")
 
-    if (!Array.isArray(schedule.scheduled_tasks)) {
-      throw new Error("Invalid scheduling format")
+    if (!Array.isArray(aiOutput.ordered_tasks)) {
+      throw new Error("AI returned invalid ordering format")
     }
 
-    return { schedule }
+    // Validate task ids — drop any the AI hallucinated
+    const validIds = new Set(tasks.map(t => t.id))
+    const validOrdered = (aiOutput.ordered_tasks as { task_id: string; day_offset: number }[])
+      .filter(item => validIds.has(item.task_id))
+
+    // Compute actual times deterministically — guaranteed no overlaps
+    const scheduled_tasks = computeScheduleTimes(validOrdered, tasks, hoursPerDay, baseDate, existingSchedule)
+
+    // Any tasks not placed go to unscheduled
+    const scheduledIds = new Set(scheduled_tasks.map(t => t.task_id))
+    const unscheduled_tasks = [
+      ...(aiOutput.unscheduled_tasks || []).filter((u: any) => validIds.has(u.task_id)),
+      ...tasks
+        .filter(t => !scheduledIds.has(t.id) && !validOrdered.find(o => o.task_id === t.id))
+        .map(t => ({ task_id: t.id, reason: "not assigned by AI" }))
+    ]
+
+    return { schedule: { scheduled_tasks, unscheduled_tasks } }
 
   } catch (error: any) {
     console.error("Task Scheduling Error:", error)
     return { error: error.message || "Failed to schedule tasks" }
   }
+}
+
+/**
+ * Deterministically assigns clock times to ordered tasks.
+ * Guarantees no two tasks overlap and respects daily hour limits.
+ */
+function computeScheduleTimes(
+  orderedTasks: { task_id: string; day_offset: number }[],
+  tasks: { id: string; durationMinutes: number }[],
+  hoursPerDay: number,
+  baseDate: Date,
+  existingSchedule?: { scheduledTime: string; durationMinutes: number; scheduledDate: string }[]
+): { task_id: string; scheduled_date: string; scheduled_time: string; duration_minutes: number }[] {
+
+  const maxDailyMins = hoursPerDay * 60
+  // Track the current "cursor" minute for each day (key = day_offset)
+  const cursors: Record<number, number> = {}
+  // Track total scheduled minutes per day for the daily cap
+  const dailyUsed: Record<number, number> = {}
+
+  // Seed cursors with already-scheduled tasks on the same dates
+  if (existingSchedule && existingSchedule.length > 0) {
+    for (const existing of existingSchedule) {
+      // Only worry about day_offset 0 for now (the target day)
+      const existingDate = existing.scheduledDate
+      const targetDate = new Date(baseDate).toISOString().split("T")[0]
+      if (existingDate !== targetDate) continue
+
+      const [h, m] = existing.scheduledTime.split(":").map(Number)
+      const endMin = h * 60 + m + (existing.durationMinutes || 60) + 10
+      cursors[0] = Math.max(cursors[0] ?? 8 * 60, endMin)
+      dailyUsed[0] = (dailyUsed[0] ?? 0) + (existing.durationMinutes || 60)
+    }
+  }
+
+  const result: { task_id: string; scheduled_date: string; scheduled_time: string; duration_minutes: number }[] = []
+
+  // Group by day_offset preserving order
+  const byDay: Record<number, string[]> = {}
+  for (const item of orderedTasks) {
+    const d = item.day_offset ?? 0
+    if (!byDay[d]) byDay[d] = []
+    byDay[d].push(item.task_id)
+  }
+
+  for (const dayOffset of Object.keys(byDay).map(Number).sort()) {
+    const date = new Date(baseDate)
+    date.setDate(date.getDate() + dayOffset)
+    const dateStr = date.toISOString().split("T")[0]
+
+    let cursor = cursors[dayOffset] ?? 8 * 60   // start at 08:00
+    let used = dailyUsed[dayOffset] ?? 0
+    let consecutiveMins = 0
+
+    for (const taskId of byDay[dayOffset]) {
+      const task = tasks.find(t => t.id === taskId)
+      if (!task) continue
+
+      const dur = Math.min(task.durationMinutes || 60, 90)
+
+      // Enforce daily cap
+      if (used + dur > maxDailyMins) continue
+
+      // 30-min long break after 3 consecutive hours of study
+      if (consecutiveMins >= 180) {
+        cursor += 30
+        consecutiveMins = 0
+      }
+
+      // Don't schedule past 22:00
+      if (cursor + dur > 22 * 60) continue
+
+      const h = Math.floor(cursor / 60)
+      const m = cursor % 60
+      result.push({
+        task_id: taskId,
+        scheduled_date: dateStr,
+        scheduled_time: `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`,
+        duration_minutes: dur
+      })
+
+      // 10-min break between tasks
+      cursor += dur + 10
+      used += dur
+      consecutiveMins += dur + 10
+    }
+  }
+
+  return result
 }

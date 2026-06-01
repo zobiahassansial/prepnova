@@ -27,6 +27,7 @@ export default function FlashcardsPage() {
     const [decks, setDecks] = useState<Deck[]>([])
     const [isCreating, setIsCreating] = useState(false)
     const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+    const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium")
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const canCreateMore = !planLoading && ((usage.flashcards ?? 0) < (limits.flashcards))
@@ -87,14 +88,8 @@ export default function FlashcardsPage() {
     }
 
     const generateAndSaveDeck = async (title: string, file: File | null, sourceId: string | null = null) => {
-        if (!canCreateMore) {
-            setShowUpgradeModal(true)
-            return
-        }
-        if (file && !canUseAI) {
-            setShowUpgradeModal(true)
-            return
-        }
+        if (!canCreateMore) { setShowUpgradeModal(true); return }
+        if (file && !canUseAI) { setShowUpgradeModal(true); return }
 
         setProcessing(true)
         try {
@@ -103,12 +98,12 @@ export default function FlashcardsPage() {
             if (file) {
                 const formData = new FormData()
                 formData.append("file", file)
+                formData.append("difficulty", difficulty)
 
                 const response = await fetch("/api/generate", { method: "POST", body: formData })
-                if (!response.ok) throw new Error("AI generation failed")
-
                 const data = await response.json()
-                if (!data.flashcards) throw new Error("No cards returned from AI")
+                if (!response.ok) throw new Error(data.error || "AI generation failed")
+                if (!data.flashcards || data.flashcards.length === 0) throw new Error("No cards returned from AI")
 
                 aiCards = data.flashcards.map((card: any, i: number) => ({
                     id: `${Date.now()}_${i}`,
@@ -125,14 +120,13 @@ export default function FlashcardsPage() {
             const newDeck = {
                 title,
                 sourceFileId: sourceId || "manual",
+                difficulty,
                 cards: aiCards,
                 createdAt: Timestamp.now(),
                 lastStudied: null,
             }
 
             await addDoc(collection(db, "users", user!.uid, "flashcardDecks"), newDeck)
-
-            // Log to activityLog
             await addDoc(collection(db, "users", user!.uid, "activityLog"), {
                 type: "deck_created",
                 description: `Created flashcard deck: "${title}"`,
@@ -141,7 +135,7 @@ export default function FlashcardsPage() {
             })
 
             setIsCreating(false)
-            toast.success(`Deck created with ${aiCards.length} AI cards!`)
+            toast.success(`Deck created with ${aiCards.length} cards!`)
         } catch (err: any) {
             toast.error(err.message || "Failed to create deck")
         } finally {
@@ -187,6 +181,35 @@ export default function FlashcardsPage() {
                         : "Upgrade to Standard or higher to use AI card generation."
                     }
                 </p>
+
+                {/* ── Difficulty Picker ── */}
+                <div className="mb-8">
+                    <p className="text-sm font-medium mb-3">Card Difficulty</p>
+                    <div className="grid grid-cols-3 gap-3">
+                        {(["easy", "medium", "hard"] as const).map((lvl) => {
+                            const meta = {
+                                easy:   { label: "Easy",   emoji: "🟢", desc: "Definitions & basic recall" },
+                                medium: { label: "Medium", emoji: "🟡", desc: "Understanding & explanation" },
+                                hard:   { label: "Hard",   emoji: "🔴", desc: "Analysis & critical thinking" },
+                            }[lvl]
+                            return (
+                                <button
+                                    key={lvl}
+                                    onClick={() => setDifficulty(lvl)}
+                                    className={`flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all ${
+                                        difficulty === lvl
+                                            ? "border-primary bg-primary/5 shadow-sm"
+                                            : "border-border hover:border-muted-foreground/40"
+                                    }`}
+                                >
+                                    <span className="text-2xl">{meta.emoji}</span>
+                                    <span className="font-semibold text-sm">{meta.label}</span>
+                                    <span className="text-xs text-muted-foreground text-center leading-tight">{meta.desc}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
 
                 <Tabs defaultValue="upload" className="w-full">
                     <TabsList className="grid w-full grid-cols-2 mb-8">

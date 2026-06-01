@@ -93,18 +93,16 @@ export default function SignupPage() {
     }
 
     // Step 1: validate and advance to step 2
-    function handleNext() {
-        const values = form.getValues()
-        if (!values.email || !values.email.includes('@')) {
-            form.setError('email', { message: 'Please enter a valid email' })
-            return
-        }
-        if (!values.password || values.password.length < 6) {
-            form.setError('password', { message: 'Password must be at least 6 characters' })
-            return
-        }
+    async function handleNext() {
+        const valid = await form.trigger(['name', 'username', 'email', 'password'])
+        if (!valid) return
         if (usernameAvailable === false) {
             toast.error("Please choose an available username.")
+            return
+        }
+        const username = form.getValues('username')
+        if (usernameAvailable === null && username.length >= 3) {
+            toast.error("Still checking username availability — please wait a moment.")
             return
         }
         setStep(2)
@@ -126,14 +124,8 @@ export default function SignupPage() {
             const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password)
             const user = userCredential.user
 
-            await sendEmailVerification(user, {
-                url: `${window.location.origin}/login`,
-                handleCodeInApp: false,
-            })
-
-            await updateProfile(user, {
-                displayName: values.name
-            })
+            // Always complete profile + Firestore first — verification email is best-effort
+            await updateProfile(user, { displayName: values.name })
 
             await setDoc(doc(db, "users", user.uid), {
                 uid: user.uid,
@@ -145,11 +137,9 @@ export default function SignupPage() {
                 onboardingCompleted: true,
                 createdAt: serverTimestamp(),
                 userType,
-                // Student fields
                 degree: userType === 'student' ? (degree || null) : null,
                 gradeYear: userType === 'student' ? (gradeYear || null) : null,
                 subjects: userType === 'student' ? subjects.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
-                // Professional fields
                 profession: userType === 'professional' ? (profession || null) : null,
                 industry: userType === 'professional' ? (industry || null) : null,
                 educationLevel: userType === 'student' ? 'Student' : 'Professional',
@@ -162,15 +152,29 @@ export default function SignupPage() {
                 monthlyResetAt: new Date(new Date().setMonth(new Date().getMonth() + 1))
             }, { merge: true })
 
-            toast.success("Account created! Verify your email before logging in.")
+            // Send verification email — failure here is non-fatal (e.g. unwhitelisted domain)
+            try {
+                await sendEmailVerification(user, {
+                    url: `${window.location.origin}/login`,
+                    handleCodeInApp: false,
+                })
+            } catch {
+                // Verification email failed (common on non-whitelisted domains like ngrok).
+                // Account is created — user will need to verify via Firebase Console or once domain is whitelisted.
+            }
+
+            // Sign out so login page enforces the email-verified check
+            await auth.signOut()
+
+            toast.success("Account created! Check your email to verify before logging in.")
             router.push("/login")
 
         } catch (error: any) {
-            console.error(error)
             if (error.code === 'auth/email-already-in-use') {
                 toast.error("This email is already registered.")
                 setStep(1)
             } else {
+                console.error("Signup error:", error)
                 toast.error(error.message || "Failed to create account")
             }
         } finally {

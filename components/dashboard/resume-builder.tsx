@@ -73,6 +73,8 @@ export function ResumeBuilder() {
     // Template State Logic
     const [resumeTemplateTouched, setResumeTemplateTouched] = useState(false)
     const [coverTemplateTouched, setCoverTemplateTouched] = useState(false)
+    const [resumeTemplatePopoverOpen, setResumeTemplatePopoverOpen] = useState(false)
+    const [coverTemplatePopoverOpen, setCoverTemplatePopoverOpen] = useState(false)
 
     // Derived active templates (Default to 'basic' for resume if untouched, 'modern' for cover if untouched? 
     // User said: "Resume uses Basic template... If user never touches Templates... Resume stays Basic".
@@ -95,8 +97,15 @@ export function ResumeBuilder() {
         [resumeTemplateTouched, resumeData.template])
 
     const activeCoverTemplate = useMemo(() =>
-        coverTemplateTouched ? (resumeData.coverTemplate || "modern") : "modern",
-        [coverTemplateTouched, resumeData.coverTemplate])
+        coverTemplateTouched ? (resumeData.coverTemplate || resumeData.template) : resumeData.template,
+        [coverTemplateTouched, resumeData.coverTemplate, resumeData.template])
+
+    // Auto-sync cover template to resume template whenever it changes (unless user picked one manually)
+    useEffect(() => {
+        if (resumeData.includeCover && !coverTemplateTouched) {
+            setResumeData(prev => ({ ...prev, coverTemplate: prev.template as any }))
+        }
+    }, [resumeData.template, resumeData.includeCover, coverTemplateTouched])
 
 
 
@@ -176,11 +185,13 @@ export function ResumeBuilder() {
             activeTemplateId: id,
             ...(customHtml ? { customTemplateHtml: customHtml } : {})
         }))
+        setResumeTemplatePopoverOpen(false)
     }, [])
 
     const handleSelectCoverTemplate = useCallback((id: string, customHtml?: string) => {
         setCoverTemplateTouched(true)
         setResumeData(prev => ({ ...prev, coverTemplate: id as any }))
+        setCoverTemplatePopoverOpen(false)
     }, [])
 
     return (
@@ -200,7 +211,7 @@ export function ResumeBuilder() {
                     <h1 className="text-xl font-bold">Resume Builder</h1>
                     <div className="ml-4 flex gap-2">
                         {/* Resume Templates Popover */}
-                        <Popover>
+                        <Popover open={resumeTemplatePopoverOpen} onOpenChange={setResumeTemplatePopoverOpen}>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" size="sm" className="h-8">
                                     <Sparkles className="mr-2 h-3 w-3" />
@@ -247,7 +258,7 @@ export function ResumeBuilder() {
 
                         {/* Cover Letter Templates Popover */}
                         {resumeData.includeCover && (
-                            <Popover>
+                            <Popover open={coverTemplatePopoverOpen} onOpenChange={setCoverTemplatePopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <Button variant="outline" size="sm" className="h-8 border-dashed">
                                         <Sparkles className="mr-2 h-3 w-3" />
@@ -259,7 +270,7 @@ export function ResumeBuilder() {
                                     <TemplateGallery
                                         selected={resumeData.coverTemplate || "modern"}
                                         activeTemplate={activeCoverTemplate}
-                                        type="cover" // Active type
+                                        type="cover"
                                         onSelect={handleSelectCoverTemplate}
                                     />
                                 </PopoverContent>

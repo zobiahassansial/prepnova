@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, memo } from "react"
+import React, { useState, useEffect, useMemo, useCallback, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Clock, BookOpen, CheckCircle2, Loader2, Sparkles, Filter, Play, Trash2, MoreVertical } from "lucide-react"
+import { Plus, Clock, BookOpen, CheckCircle2, Loader2, Sparkles, Filter, Play, Trash2, MoreVertical, X } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils"
 import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
 import { generateStudyPlan, scheduleUserTasks } from "@/actions/ai-planner"
-import { createStudyTask, logStudyActivity, scheduleStudyTask, unscheduleStudyTask, checkScheduleConflict, checkDailyLimit, deleteStudyTask, deleteAllScheduledTasks, deleteAllUnscheduledTasks, updateTaskOrder } from "@/actions/study-planner"
+import { createStudyTask, logStudyActivity, scheduleStudyTask, unscheduleStudyTask, checkScheduleConflict, checkDailyLimit, deleteStudyTask, deleteAllScheduledTasks, deleteAllUnscheduledTasks, updateTaskOrder, clearDayTasks } from "@/actions/study-planner"
 import { checkLimit, incrementUsage, getUserSubscription } from "@/lib/limits"
 import { db, auth } from "@/lib/firebase"
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, Timestamp, getDoc } from "firebase/firestore"
@@ -51,6 +51,8 @@ export function StudyPlanner() {
     const [tasks, setTasks] = useState<StudyTask[]>([])
     const [schedule, setSchedule] = useState<StudySchedule[]>([])
     const [draggedTask, setDraggedTask] = useState<StudyTask | null>(null)
+    const [draggedScheduleId, setDraggedScheduleId] = useState<string | undefined>(undefined)
+    const [dragOverZoneId, setDragOverZoneId] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState<string>(new Date().toDateString())
     const [showCalendar, setShowCalendar] = useState(false)
     const [aiOpen, setAiOpen] = useState(false)
@@ -58,7 +60,6 @@ export function StudyPlanner() {
     const [createLoading, setCreateLoading] = useState(false)
     const [detailOpen, setDetailOpen] = useState(false)
     const [selectedTask, setSelectedTask] = useState<StudyTask | null>(null)
-    const [dropIndicator, setDropIndicator] = useState<{ id: string, position: 'top' | 'bottom' } | null>(null)
     const [timerOpen, setTimerOpen] = useState(false)
 
     // --- Auth & Data Fetching ---
@@ -288,24 +289,113 @@ export function StudyPlanner() {
     }).filter(Boolean), [schedule, tasks])
 
     const tabDates = useMemo(() => {
-        const dates = Array.from(new Set([...schedule.map((s: StudySchedule) => {
+        const datesSet = new Set<string>()
+        // Only include dates that actually have schedule entries
+        schedule.forEach((s: StudySchedule) => {
             const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
-            return d.toDateString()
-        }), activeTab]))
-        return dates.sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())
-    }, [schedule, activeTab])
+            datesSet.add(d.toDateString())
+        })
+        // Always keep today so user always has a "home" tab
+        datesSet.add(new Date().toDateString())
+        return Array.from(datesSet).sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    }, [schedule])
+
+    // Auto-switch activeTab when its date no longer has any schedule entries
+    useEffect(() => {
+        if (tabDates.length > 0 && !tabDates.includes(activeTab)) {
+            // Prefer today, otherwise pick the latest available date
+            const today = new Date().toDateString()
+            setActiveTab(tabDates.includes(today) ? today : tabDates[tabDates.length - 1])
+        }
+    }, [tabDates, activeTab])
 
     const scheduledTasksForDay = useMemo(() => schedule.filter((s: StudySchedule) => {
         const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
         return d.toDateString() === activeTab
     })
         .sort((a: StudySchedule, b: StudySchedule) => {
-            const taskA = tasks.find((t: StudyTask) => t.id === a.taskId)
-            const taskB = tasks.find((t: StudyTask) => t.id === b.taskId)
-            if (taskA?.status === 'completed' && taskB?.status !== 'completed') return 1
-            if (taskA?.status !== 'completed' && taskB?.status === 'completed') return -1
+            // Sort by time first, then orderIndex as tiebreaker
+            const [ah, am] = a.scheduledTime.split(":").map(Number)
+            const [bh, bm] = b.scheduledTime.split(":").map(Number)
+            const timeDiff = ah * 60 + am - (bh * 60 + bm)
+            if (timeDiff !== 0) return timeDiff
             return (a.orderIndex || 0) - (b.orderIndex || 0)
         }), [schedule, tasks, activeTab])
+
+    // Compute a scheduled time for inserting a task at `insertIndex` in `sortedItems`
+    const computeTimeAtIndex = useCallback((insertIndex: number, sortedItems: StudySchedule[]): string => {
+        if (sortedItems.length === 0) return "08:00"
+        if (insertIndex === 0) {
+            // Before first item — 5 min before, minimum 08:00
+            const [h, m] = sortedItems[0].scheduledTime.split(":").map(Number)
+            const mins = Math.max(8 * 60, h * 60 + m - 5)
+            return `${Math.floor(mins / 60).toString().padStart(2, "0")}:${(mins % 60).toString().padStart(2, "0")}`
+        }
+        // After item at insertIndex - 1
+        const prev = sortedItems[insertIndex - 1]
+        const prevTask = tasks.find((t: StudyTask) => t.id === prev.taskId)
+        const [h, m] = prev.scheduledTime.split(":").map(Number)
+        const endMins = h * 60 + m + (prevTask?.durationMinutes || 60)
+        return `${Math.floor(endMins / 60).toString().padStart(2, "0")}:${(endMins % 60).toString().padStart(2, "0")}`
+    }, [tasks])
+
+    // Handle a drop onto a specific insertion index in the scheduled list
+    const handleDropAtIndex = useCallback(async (insertIndex: number) => {
+        if (!draggedTask || !user) return
+        const dateObj = new Date(activeTab)
+        const sortedItems = scheduledTasksForDay.filter(s => s.id !== draggedScheduleId)
+        const newTime = computeTimeAtIndex(insertIndex, sortedItems)
+
+        try {
+            if (draggedScheduleId) {
+                // Rescheduling an already-scheduled item (reorder or cross-day move)
+                const scheduleRef = doc(db, "study_schedule", draggedScheduleId)
+                await updateDoc(scheduleRef, {
+                    scheduledDate: Timestamp.fromDate(dateObj),
+                    scheduledTime: newTime,
+                    orderIndex: insertIndex
+                })
+                toast.success("Task moved")
+            } else {
+                // Scheduling an unscheduled task
+                const hasConflict = await checkScheduleConflict(user.uid, dateObj, newTime, draggedTask.durationMinutes || 60)
+                if (hasConflict) { toast.error("Schedule conflict detected!"); return }
+                await scheduleStudyTask(user.uid, draggedTask.id, dateObj, newTime)
+                toast.success(`Scheduled: ${draggedTask.title}`)
+            }
+        } catch (e) {
+            console.error(e)
+            toast.error("Failed to schedule task")
+        } finally {
+            setDraggedTask(null)
+            setDraggedScheduleId(undefined)
+            setDragOverZoneId(null)
+        }
+    }, [draggedTask, draggedScheduleId, user, activeTab, scheduledTasksForDay, computeTimeAtIndex])
+
+    // Per-day completion status
+    const dayTaskStatuses = useMemo(() => {
+        return scheduledTasksForDay.map(s => tasks.find(t => t.id === s.taskId)?.status)
+    }, [scheduledTasksForDay, tasks])
+
+    const allDayDone = scheduledTasksForDay.length > 0 && dayTaskStatuses.every(s => s === "completed")
+    const someDayDone = dayTaskStatuses.some(s => s === "completed")
+
+    const handleClearDay = useCallback(async (dateStr: string, confirm_msg: string) => {
+        if (!user) return
+        if (!confirm(confirm_msg)) return
+        try {
+            // Build YYYY-MM-DD from toDateString()
+            const d = new Date(dateStr)
+            const y = d.getFullYear()
+            const mo = String(d.getMonth() + 1).padStart(2, "0")
+            const dy = String(d.getDate()).padStart(2, "0")
+            await clearDayTasks(user.uid, `${y}-${mo}-${dy}`)
+            toast.success("Day cleared")
+        } catch (e) {
+            toast.error("Failed to clear day")
+        }
+    }, [user])
 
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
@@ -450,6 +540,8 @@ export function StudyPlanner() {
                         onClose={() => setAiOpen(false)}
                         existingTasks={tasks.filter((t: StudyTask) => t.status === "unscheduled")}
                         targetDate={activeTab}
+                        existingSchedule={schedule}
+                        allTasks={tasks}
                     />
 
                 </DialogContent>
@@ -488,165 +580,194 @@ export function StudyPlanner() {
                                 <h2 className="text-lg font-semibold tracking-tight">Scheduled Tasks</h2>
                             </div>
 
-                            {/* Always render Tabs, defaulting to activeTab even if no schedule */}
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                                 {/* Browser-like Tab Bar */}
                                 <div className="w-full overflow-x-auto bg-muted/20 pt-2 px-2 rounded-t-lg border-b border-border [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex items-center">
                                     <TabsList className="w-full justify-start h-auto bg-transparent p-0 space-x-1 flex-1">
-                                        {tabDates
-                                            .map(dateStr => (
-                                                <TabsTrigger
-                                                    key={dateStr}
-                                                    value={dateStr}
-                                                    className="rounded-t-md rounded-b-none border border-transparent data-[state=active]:bg-background data-[state=active]:border-border data-[state=active]:border-b-background data-[state=active]:shadow-none px-4 py-2 text-sm font-medium transition-all relative top-px"
-                                                >
-                                                    {new Date(dateStr).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                                                </TabsTrigger>
-                                            ))}
+                                        {tabDates.map(dateStr => {
+                                            const dayEntries = schedule.filter((s: StudySchedule) => {
+                                                const sd = s.scheduledDate?.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
+                                                return sd.toDateString() === dateStr
+                                            })
+                                            const dayStatuses = dayEntries.map(s => tasks.find(t => t.id === s.taskId)?.status)
+                                            const tabAllDone = dayEntries.length > 0 && dayStatuses.every(s => s === "completed")
+                                            const isToday = dateStr === new Date().toDateString()
+                                            return (
+                                                <div key={dateStr} className="relative flex items-center group/tab">
+                                                    <TabsTrigger
+                                                        value={dateStr}
+                                                        className="rounded-t-md rounded-b-none border border-transparent data-[state=active]:bg-background data-[state=active]:border-border data-[state=active]:border-b-background data-[state=active]:shadow-none px-3 py-2 pr-7 text-sm font-medium transition-all relative top-px"
+                                                    >
+                                                        {tabAllDone && <span className="mr-1.5 text-green-500 text-xs">✓</span>}
+                                                        {new Date(dateStr).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                                                        {isToday && <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">Today</span>}
+                                                    </TabsTrigger>
+                                                    {/* Close / clear button — visible on hover or when all done */}
+                                                    {!isToday && (
+                                                        <button
+                                                            className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 transition-opacity text-muted-foreground hover:text-foreground hover:bg-muted z-10 ${tabAllDone ? "opacity-100 text-green-600 hover:text-red-500" : "opacity-0 group-hover/tab:opacity-100"}`}
+                                                            title={tabAllDone ? "Clear completed day" : "Clear this day"}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                handleClearDay(dateStr, tabAllDone
+                                                                    ? "All tasks are done! Remove this day from your planner?"
+                                                                    : "Clear all tasks for this day? Completed tasks will be deleted, incomplete tasks will be moved back to unscheduled.")
+                                                            }}
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
                                     </TabsList>
                                 </div>
 
-                                <TabsContent value={activeTab} className="mt-4 space-y-4">
-                                    <div
-                                        className="space-y-2 min-h-[100px]"
-                                        onDragOver={(e) => e.preventDefault()}
-                                        onDrop={async (e) => {
-                                            e.preventDefault()
-                                            e.stopPropagation()
-                                            setDropIndicator(null)
-                                            const data = e.dataTransfer.getData("application/json")
-                                            if (!data) return
-                                            const draggedItem = JSON.parse(data)
-                                            if (!user) return
+                                <TabsContent value={activeTab} className="mt-4 space-y-0">
+                                    {/* All-done banner */}
+                                    {allDayDone && (
+                                        <div className="flex items-center justify-between p-3 mb-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm">
+                                            <span className="font-medium">🎉 All tasks completed for this day!</span>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40 h-7 text-xs"
+                                                onClick={() => handleClearDay(activeTab, "Remove this completed day from your planner?")}
+                                            >
+                                                <Trash2 className="h-3 w-3 mr-1" /> Clear Day
+                                            </Button>
+                                        </div>
+                                    )}
 
-                                            const dateObj = new Date(activeTab)
-                                            let newTime = "09:00"
+                                    {/* Partial-done banner when some (not all) tasks done and day is not today */}
+                                    {!allDayDone && someDayDone && activeTab !== new Date().toDateString() && scheduledTasksForDay.length > 0 && (
+                                        <div className="flex items-center justify-between p-3 mb-3 rounded-lg bg-muted/40 border border-border text-muted-foreground text-sm">
+                                            <span>{dayTaskStatuses.filter(s => s === "completed").length}/{scheduledTasksForDay.length} tasks done</span>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                                onClick={() => handleClearDay(activeTab, "Clear all tasks for this day? Completed tasks are deleted, incomplete ones go back to unscheduled.")}
+                                            >
+                                                <Trash2 className="h-3 w-3 mr-1" /> Clear Day
+                                            </Button>
+                                        </div>
+                                    )}
 
-                                            // Filter for current activeTab tasks only
-                                            const currentDayItems = schedule.filter((s: StudySchedule) => {
-                                                const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
-                                                return d.toDateString() === activeTab
-                                            }).sort((a: StudySchedule, b: StudySchedule) => (a.orderIndex || 0) - (b.orderIndex || 0))
+                                    {/* Empty-state drop zone when no tasks for the day */}
+                                    {scheduledTasksForDay.length === 0 && (
+                                        <div
+                                            className={`min-h-[120px] rounded-lg border-2 border-dashed flex items-center justify-center text-sm text-muted-foreground transition-colors ${dragOverZoneId === "zone-0" ? "border-primary bg-primary/5 text-primary" : "border-muted-foreground/20"}`}
+                                            onDragOver={(e) => { e.preventDefault(); setDragOverZoneId("zone-0") }}
+                                            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverZoneId(null) }}
+                                            onDrop={(e) => { e.preventDefault(); handleDropAtIndex(0) }}
+                                        >
+                                            {dragOverZoneId === "zone-0" ? "Drop here to schedule" : "Drag tasks here to schedule them"}
+                                        </div>
+                                    )}
 
-                                            if (currentDayItems.length > 0) {
-                                                const lastItem = currentDayItems[currentDayItems.length - 1]
-                                                const tTask = tasks.find(t => t.id === lastItem.taskId)
-                                                const [lh, lm] = lastItem.scheduledTime.split(":").map(Number)
-                                                const lDate = new Date(dateObj)
-                                                lDate.setHours(lh, lm + (tTask?.durationMinutes || 60), 0, 0)
-                                                newTime = `${lDate.getHours().toString().padStart(2, '0')}:${lDate.getMinutes().toString().padStart(2, '0')}`
-                                            }
+                                    {/* Render items with drop zones BETWEEN them */}
+                                    <AnimatePresence>
+                                        {scheduledTasksForDay.map((s: StudySchedule, index: number) => {
+                                            const task = tasks.find((t: StudyTask) => t.id === s.taskId)
+                                            if (!task) return null
+                                            const isCompleted = task.status === "completed"
+                                            const isDraggingThis = draggedScheduleId === s.id
+                                            const zoneId = `zone-${index}`
 
-                                            // Schedule/Reschedule logic (Use activeTab date)
-                                            if (draggedItem.scheduleId) {
-                                                // Rescheduling: remove from old schedule then add to new
-                                                await unscheduleStudyTask(user.uid, draggedItem.scheduleId, draggedItem.id) // First unschedule
-                                                await scheduleStudyTask(user.uid, draggedItem.id, dateObj, newTime)
-                                                toast.success(`Moved to ${activeTab}`)
-                                            } else {
-                                                // New Schedule
-                                                await scheduleStudyTask(user.uid, draggedItem.id, dateObj, newTime)
-                                                toast.success(`Scheduled for ${activeTab}`)
-                                            }
-                                        }}
-                                    >
-                                        <AnimatePresence>
-                                            {scheduledTasksForDay
-                                                .map((s: StudySchedule, index: number) => {
-                                                    const task = tasks.find((t: StudyTask) => t.id === s.taskId)
-                                                    if (!task) return null
-                                                    const isCompleted = task.status === "completed"
+                                            return (
+                                                <React.Fragment key={s.id}>
+                                                    {/* Drop zone BEFORE this item */}
+                                                    <div
+                                                        className={`transition-all duration-150 rounded-md overflow-hidden ${dragOverZoneId === zoneId && !isDraggingThis ? "h-12 border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center text-xs text-primary mb-1" : "h-1"}`}
+                                                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!isDraggingThis) setDragOverZoneId(zoneId) }}
+                                                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverZoneId(null) }}
+                                                        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropAtIndex(index) }}
+                                                    >
+                                                        {dragOverZoneId === zoneId && !isDraggingThis && "Drop here"}
+                                                    </div>
 
-                                                    return (
-                                                        <motion.div
-                                                            layout
-                                                            key={s.id}
-                                                            initial={{ opacity: 0, y: 20 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, height: 0 }}
-                                                            className={`relative flex items-center justify-between p-4 border rounded-lg transition-all ${isCompleted
-                                                                ? "bg-white/5 border-white/10 shadow-inner"
-                                                                : "bg-card hover:bg-accent/50 cursor-grab shadow-sm"
-                                                                }`}
-                                                            draggable={!isCompleted}
-                                                            onDragStart={(e: any) => {
-                                                                e.dataTransfer.setData("application/json", JSON.stringify({ ...task, scheduleId: s.id }))
-                                                                setDraggedTask(task)
-                                                            }}
-                                                            onDragEnd={() => setDraggedTask(null)}
-                                                            onDragOver={(e: any) => {
-                                                                e.preventDefault()
-                                                                const rect = e.currentTarget.getBoundingClientRect()
-                                                                const y = e.clientY - rect.top
-                                                                const position = y < rect.height / 2 ? 'top' : 'bottom'
-                                                                setDropIndicator({ id: s.id, position })
-                                                            }}
-                                                        >
-                                                            {dropIndicator?.id === s.id && dropIndicator.position === 'top' && (
-                                                                <div className="absolute -top-3 left-0 right-0 h-0.5 bg-primary z-10" />
-                                                            )}
-
-                                                            <div className="flex items-center gap-4 flex-1">
-                                                                <div className={`w-1 h-12 rounded-full ${task.priority === 'High' ? 'bg-red-500' :
-                                                                    task.priority === 'Medium' ? 'bg-orange-500' : 'bg-yellow-500'
-                                                                    }`} />
-                                                                <div>
-                                                                    <div className={`font-medium text-base ${isCompleted ? "line-through text-muted-foreground" : ""}`}>{task.title}</div>
-                                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                                        <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">
-                                                                            {formatTimeRange(s.scheduledTime, task.durationMinutes || 60)}
-                                                                        </span>
-                                                                        <span>•</span>
-                                                                        <span>{task.durationMinutes}m</span>
-                                                                        <span>•</span>
-                                                                        <span>{task.subject}</span>
-                                                                    </div>
+                                                    <motion.div
+                                                        layout
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: isDraggingThis ? 0.4 : 1, y: 0 }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        className={`flex items-center justify-between p-4 border rounded-lg mb-1 transition-all select-none ${isCompleted
+                                                            ? "bg-muted/30 border-muted text-muted-foreground"
+                                                            : "bg-card hover:bg-accent/50 shadow-sm"
+                                                            } ${!isCompleted ? "cursor-grab active:cursor-grabbing" : ""}`}
+                                                        draggable={!isCompleted}
+                                                        onDragStart={(e: any) => {
+                                                            e.dataTransfer.effectAllowed = "move"
+                                                            e.dataTransfer.setData("application/json", JSON.stringify({ ...task, scheduleId: s.id }))
+                                                            setDraggedTask(task)
+                                                            setDraggedScheduleId(s.id)
+                                                        }}
+                                                        onDragEnd={() => {
+                                                            setDraggedTask(null)
+                                                            setDraggedScheduleId(undefined)
+                                                            setDragOverZoneId(null)
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                            <div className={`w-1 h-12 rounded-full flex-shrink-0 ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-orange-500' : 'bg-yellow-500'}`} />
+                                                            <div className="min-w-0">
+                                                                <div className={`font-medium text-base truncate ${isCompleted ? "line-through" : ""}`}>{task.title}</div>
+                                                                <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                                                                    <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">
+                                                                        {formatTimeRange(s.scheduledTime, task.durationMinutes || 60)}
+                                                                    </span>
+                                                                    <span className="hidden sm:inline">•</span>
+                                                                    <span className="hidden sm:inline">{task.durationMinutes}m</span>
+                                                                    <span className="hidden sm:inline">•</span>
+                                                                    <span className="hidden sm:inline truncate">{task.subject}</span>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex gap-2">
-                                                                {!isCompleted && (
-                                                                    <>
-                                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => window.location.href = `/study/mode/${task.id}`} title="Start">
-                                                                            <Play className="h-4 w-4" />
-                                                                        </Button>
-                                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={async () => {
-                                                                            if (!user) return
-                                                                            await unscheduleStudyTask(user.uid, s.id, task.id)
-                                                                            toast.success("Unscheduled")
-                                                                        }} title="Unschedule"><Filter className="h-4 w-4 rotate-180" /></Button>
-                                                                        <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white" onClick={async () => {
-                                                                            if (!user) return
-                                                                            await updateDoc(doc(db, "study_tasks", task.id), { status: "completed" })
-                                                                            await logStudyActivity(user.uid, task.id, "completed", "Task completed via list")
-                                                                            toast.success("Completed!")
-                                                                        }} title="Complete"><CheckCircle2 className="h-4 w-4" /></Button>
-                                                                    </>
-                                                                )}
-                                                                <Button size="sm" variant="destructive" className="h-8 px-2" onClick={async () => {
-                                                                    if (!user) return
-                                                                    if (confirm("Delete?")) {
-                                                                        await deleteStudyTask(user.uid, task.id)
-                                                                        toast.success("Deleted")
-                                                                    }
-                                                                }} title="Delete"><Trash2 className="h-4 w-4" /></Button>
-                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-1 flex-shrink-0 ml-2">
+                                                            {!isCompleted && (
+                                                                <>
+                                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => window.location.href = `/study/mode/${task.id}`} title="Start">
+                                                                        <Play className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={async () => {
+                                                                        if (!user) return
+                                                                        await unscheduleStudyTask(user.uid, s.id, task.id)
+                                                                        toast.success("Unscheduled")
+                                                                    }} title="Unschedule"><Filter className="h-4 w-4 rotate-180" /></Button>
+                                                                    <Button size="sm" className="h-8 w-8 p-0 bg-green-600 hover:bg-green-700 text-white" onClick={async () => {
+                                                                        if (!user) return
+                                                                        await updateDoc(doc(db, "study_tasks", task.id), { status: "completed" })
+                                                                        await logStudyActivity(user.uid, task.id, "completed", "Task completed via list")
+                                                                        toast.success("Completed!")
+                                                                    }} title="Complete"><CheckCircle2 className="h-4 w-4" /></Button>
+                                                                </>
+                                                            )}
+                                                            <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={async () => {
+                                                                if (!user) return
+                                                                if (confirm("Delete?")) {
+                                                                    await deleteStudyTask(user.uid, task.id)
+                                                                    toast.success("Deleted")
+                                                                }
+                                                            }} title="Delete"><Trash2 className="h-3 w-3" /></Button>
+                                                        </div>
+                                                    </motion.div>
+                                                </React.Fragment>
+                                            )
+                                        })}
+                                    </AnimatePresence>
 
-                                                            {/* POST-SPACER */}
-                                                            {
-                                                                dropIndicator?.id === s.id && dropIndicator.position === 'bottom' && (
-                                                                    <motion.div
-                                                                        initial={{ height: 0, opacity: 0 }}
-                                                                        animate={{ height: 60, opacity: 1 }}
-                                                                        exit={{ height: 0, opacity: 0 }}
-                                                                        className="mt-2 border-2 border-dashed border-primary/40 rounded-lg bg-primary/5 w-full"
-                                                                    />
-                                                                )
-                                                            }
-                                                        </motion.div>
-                                                    )
-                                                })}
-                                        </AnimatePresence>
-                                    </div>
+                                    {/* Drop zone AFTER all items (append to end) */}
+                                    {scheduledTasksForDay.length > 0 && (
+                                        <div
+                                            className={`transition-all duration-150 rounded-md overflow-hidden ${dragOverZoneId === "zone-end" ? "h-12 border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center text-xs text-primary" : "h-2"}`}
+                                            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverZoneId("zone-end") }}
+                                            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverZoneId(null) }}
+                                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropAtIndex(scheduledTasksForDay.filter(s => s.id !== draggedScheduleId).length) }}
+                                        >
+                                            {dragOverZoneId === "zone-end" && "Drop here to add at end"}
+                                        </div>
+                                    )}
                                 </TabsContent>
                             </Tabs>
                         </div>
@@ -709,102 +830,115 @@ export function StudyPlanner() {
                             <CardTitle className="text-sm">Unscheduled Tasks</CardTitle>
                         </CardHeader>
                         <CardContent
-                            className="flex-1 overflow-y-auto space-y-2 p-2"
+                            className="flex-1 overflow-y-auto p-2"
                             onDragOver={(e) => e.preventDefault()}
+                            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverZoneId(null) }}
                             onDrop={async (e) => {
                                 e.preventDefault()
+                                setDragOverZoneId(null)
                                 try {
-                                    const data = e.dataTransfer.getData("application/json")
-                                    if (data) {
-                                        const item = JSON.parse(data)
-                                        if (item.scheduleId) {
-                                            if (!user) return
-                                            // Scheduled -> Unscheduled (Drop on container = Append)
-                                            await unscheduleStudyTask(user.uid, item.scheduleId, item.id, Date.now())
-                                            toast.success("Task unscheduled")
-                                        }
+                                    const raw = e.dataTransfer.getData("application/json")
+                                    if (!raw || !user) return
+                                    const item = JSON.parse(raw)
+                                    if (item.scheduleId) {
+                                        await unscheduleStudyTask(user.uid, item.scheduleId, item.id, Date.now())
+                                        toast.success("Task unscheduled")
+                                        setDraggedTask(null)
+                                        setDraggedScheduleId(undefined)
                                     }
-                                } catch (err) { }
+                                } catch { }
                             }}
                         >
-                            {tasks.filter((t: StudyTask) => t.status === "unscheduled").length > 0 ? (
-                                tasks
+                            {(() => {
+                                const unscheduled = tasks
                                     .filter((t: StudyTask) => t.status === "unscheduled")
-                                    .sort((a: StudyTask, b: StudyTask) => (a.orderIndex || 0) - (b.orderIndex || 0))
-                                    .map((task: StudyTask, index: number, array: StudyTask[]) => (
+                                    .sort((a: StudyTask, b: StudyTask) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+
+                                if (unscheduled.length === 0) return (
+                                    <div className={`flex flex-col items-center justify-center h-full min-h-[80px] text-center text-muted-foreground p-4 gap-2 rounded-lg border-2 border-dashed transition-colors ${dragOverZoneId === "unscheduled-panel" ? "border-primary bg-primary/5 text-primary" : "border-muted-foreground/20 opacity-50"}`}>
+                                        <Filter className="h-6 w-6" />
+                                        <p className="text-xs">Drag tasks here to unschedule</p>
+                                    </div>
+                                )
+
+                                return (
+                                    <div className="space-y-0">
+                                        {unscheduled.map((task: StudyTask, index: number) => {
+                                            const zoneId = `unscheduled-zone-${index}`
+                                            const isDraggingThis = draggedTask?.id === task.id && !draggedScheduleId
+                                            return (
+                                                <React.Fragment key={task.id}>
+                                                    {/* Drop zone before each item */}
+                                                    <div
+                                                        className={`transition-all duration-150 rounded overflow-hidden ${dragOverZoneId === zoneId ? "h-8 border-2 border-dashed border-primary bg-primary/5 mb-1" : "h-1"}`}
+                                                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverZoneId(zoneId) }}
+                                                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverZoneId(null) }}
+                                                        onDrop={async (e) => {
+                                                            e.preventDefault(); e.stopPropagation()
+                                                            const raw = e.dataTransfer.getData("application/json")
+                                                            if (!raw || !user) return
+                                                            const item = JSON.parse(raw)
+                                                            if (item.id === task.id) return
+                                                            const newOrder = index === 0 ? (unscheduled[0]?.orderIndex ?? 0) - 1000 : ((unscheduled[index - 1]?.orderIndex ?? 0) + (task.orderIndex ?? index * 1000)) / 2
+                                                            if (item.scheduleId) {
+                                                                await unscheduleStudyTask(user.uid, item.scheduleId, item.id, newOrder)
+                                                                toast.success("Task unscheduled")
+                                                            } else {
+                                                                await updateTaskOrder(user.uid, item.id, "study_tasks", newOrder)
+                                                            }
+                                                            setDraggedTask(null); setDraggedScheduleId(undefined); setDragOverZoneId(null)
+                                                        }}
+                                                    />
+                                                    <div
+                                                        className={`p-2 border rounded-md bg-card text-sm cursor-grab active:cursor-grabbing hover:bg-accent/50 relative group mb-1 select-none transition-opacity ${isDraggingThis ? "opacity-40" : ""}`}
+                                                        draggable
+                                                        onDragStart={(e) => {
+                                                            e.dataTransfer.effectAllowed = "move"
+                                                            e.dataTransfer.setData("application/json", JSON.stringify(task))
+                                                            setDraggedTask(task)
+                                                            setDraggedScheduleId(undefined)
+                                                        }}
+                                                        onDragEnd={() => { setDraggedTask(null); setDraggedScheduleId(undefined); setDragOverZoneId(null) }}
+                                                    >
+                                                        <div className="font-medium truncate pr-6">{task.title}</div>
+                                                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                                                            <span>{task.durationMinutes}m · {task.subject}</span>
+                                                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${task.priority === 'High' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : task.priority === 'Medium' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' : 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'}`}>{task.priority}</span>
+                                                        </div>
+                                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500" onClick={async (e) => {
+                                                                e.stopPropagation()
+                                                                if (!user) return
+                                                                if (confirm("Delete this task?")) { await deleteStudyTask(user.uid, task.id); toast.success("Task deleted") }
+                                                            }}><Trash2 className="h-3 w-3" /></Button>
+                                                        </div>
+                                                    </div>
+                                                </React.Fragment>
+                                            )
+                                        })}
+                                        {/* Drop zone at the end */}
                                         <div
-                                            key={task.id}
-                                            className="p-2 border rounded-md bg-card text-sm cursor-grab active:cursor-grabbing hover:bg-accent/50 relative group"
-                                            draggable
-                                            onDragStart={(e) => {
-                                                setDraggedTask(task)
-                                                const dragData = { ...task, type: 'unscheduled', originalIndex: index }
-                                                e.dataTransfer.setData("application/json", JSON.stringify(dragData))
-                                            }}
-                                            onDragOver={(e) => e.preventDefault()}
+                                            className={`transition-all duration-150 rounded overflow-hidden ${dragOverZoneId === "unscheduled-zone-end" ? "h-8 border-2 border-dashed border-primary bg-primary/5" : "h-1"}`}
+                                            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverZoneId("unscheduled-zone-end") }}
+                                            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverZoneId(null) }}
                                             onDrop={async (e) => {
-                                                e.preventDefault()
-                                                e.stopPropagation()
-                                                const data = e.dataTransfer.getData("application/json")
-                                                if (!data) return
-                                                const draggedItem = JSON.parse(data)
-
-                                                if (draggedItem.id === task.id) return
-
-                                                // Insert BEFORE this item
-                                                const prevItem = index > 0 ? array[index - 1] : null
-                                                const nextItem = task
-
-                                                const prevOrder = prevItem?.orderIndex || 0
-                                                const nextOrder = nextItem.orderIndex || Date.now()
-                                                const newOrderIndex = index === 0 ? nextOrder - 1000 : (prevOrder + nextOrder) / 2
-
-                                                if (!user) return
-
-                                                if (draggedItem.scheduleId) {
-                                                    // Scheduled -> Unscheduled (Insert specific pos)
-                                                    await unscheduleStudyTask(user.uid, draggedItem.scheduleId, draggedItem.id, newOrderIndex)
+                                                e.preventDefault(); e.stopPropagation()
+                                                const raw = e.dataTransfer.getData("application/json")
+                                                if (!raw || !user) return
+                                                const item = JSON.parse(raw)
+                                                const newOrder = (unscheduled[unscheduled.length - 1]?.orderIndex ?? 0) + 1000
+                                                if (item.scheduleId) {
+                                                    await unscheduleStudyTask(user.uid, item.scheduleId, item.id, newOrder)
                                                     toast.success("Task unscheduled")
-                                                } else {
-                                                    // Unscheduled -> Unscheduled (Reorder)
-                                                    await updateTaskOrder(user.uid, draggedItem.id, "study_tasks", newOrderIndex)
-                                                    // Optimistic update?
+                                                } else if (item.id !== unscheduled[unscheduled.length - 1]?.id) {
+                                                    await updateTaskOrder(user.uid, item.id, "study_tasks", newOrder)
                                                 }
+                                                setDraggedTask(null); setDraggedScheduleId(undefined); setDragOverZoneId(null)
                                             }}
-                                        >
-                                            <div className="font-medium truncate pr-6">{task.title}</div>
-                                            <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                                                <span>{task.durationMinutes}m</span>
-                                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${task.priority === 'High' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
-                                                    task.priority === 'Medium' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
-                                                        'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                                                    }`}>{task.priority}</span>
-                                            </div>
-                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6 text-muted-foreground hover:text-red-500"
-                                                    onClick={async (e) => {
-                                                        e.stopPropagation()
-                                                        if (!user) return
-                                                        if (confirm("Delete this task?")) {
-                                                            await deleteStudyTask(user.uid, task.id)
-                                                            toast.success("Task deleted")
-                                                        }
-                                                    }}
-                                                >
-                                                    <Trash2 className="h-3 w-3" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))
-                            ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4 gap-2 opacity-50">
-                                    <Filter className="h-8 w-8" />
-                                    <p className="text-sm">Drag tasks here to unschedule them.</p>
-                                </div>
-                            )}
+                                        />
+                                    </div>
+                                )
+                            })()}
                         </CardContent>
                     </Card>
                 </div>
@@ -873,116 +1007,205 @@ const TimerDialog = memo(({ open, onOpenChange }: { open: boolean, onOpenChange:
     )
 })
 
-// getDoc moved to top imports
+type ScheduledPreviewItem = {
+    task_id: string
+    scheduled_date: string
+    scheduled_time: string
+    duration_minutes: number
+    title: string
+    subject: string
+    priority: string
+}
 
-const AIPlanGenerator = memo(({ user, onClose, existingTasks, targetDate }: { user: any, onClose: () => void, existingTasks: StudyTask[], targetDate: string }) => {
+const AIPlanGenerator = memo(({ user, onClose, existingTasks, targetDate, existingSchedule, allTasks }: {
+    user: any
+    onClose: () => void
+    existingTasks: StudyTask[]
+    targetDate: string
+    existingSchedule?: StudySchedule[]
+    allTasks?: StudyTask[]
+}) => {
     const [hours, setHours] = useState(2)
     const [preferences, setPreferences] = useState("")
     const [loading, setLoading] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [preview, setPreview] = useState<ScheduledPreviewItem[] | null>(null)
+    const [skipped, setSkipped] = useState<{ task_id: string; reason: string }[]>([])
 
     const handleGenerate = async () => {
-        if (!user) return
+        if (!user || existingTasks.length === 0) return
         setLoading(true)
+        setPreview(null)
+        setSkipped([])
 
         try {
-            if (existingTasks.length === 0) {
-                toast.error("You don't have any study tasks yet. Please add tasks first so I can create a study plan.")
-                setLoading(false)
-                return
-            }
+            const tasksForAI = existingTasks.map(t => ({
+                id: t.id,
+                title: t.title,
+                subject: t.subject,
+                priority: t.priority,
+                durationMinutes: t.durationMinutes,
+                deadline: t.deadline
+                    ? (typeof (t.deadline as any).toDate === "function"
+                        ? (t.deadline as any).toDate().toISOString()
+                        : new Date(t.deadline as any).toISOString())
+                    : undefined
+            }))
 
-            const tasksForAI = existingTasks
-                .filter(t => t.status === "unscheduled")
-                .map(t => ({
-                    id: t.id,
-                    title: t.title,
-                    subject: t.subject,
-                    priority: t.priority,
-                    durationMinutes: t.durationMinutes,
-                    deadline: t.deadline ? (typeof t.deadline.toDate === 'function' ? t.deadline.toDate().toISOString() : new Date(t.deadline as any).toISOString()) : undefined
-                }))
-
+            // Build local date string without timezone shift
             const target = new Date(targetDate)
-            const offset = target.getTimezoneOffset()
-            const localDate = new Date(target.getTime() - (offset * 60 * 1000))
-            const startDateStr = localDate.toISOString().split('T')[0]
+            const y = target.getFullYear()
+            const mo = String(target.getMonth() + 1).padStart(2, "0")
+            const d = String(target.getDate()).padStart(2, "0")
+            const startDateStr = `${y}-${mo}-${d}`
 
-            const result = await scheduleUserTasks(tasksForAI, hours, preferences, 1, startDateStr)
+            // Collect already-scheduled blocks for the target day so times don't overlap
+            const dayExisting = (existingSchedule || [])
+                .filter(s => {
+                    const sd = s.scheduledDate?.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate as any)
+                    return sd.toDateString() === target.toDateString()
+                })
+                .map(s => {
+                    const task = allTasks?.find(t => t.id === s.taskId)
+                    return {
+                        scheduledTime: s.scheduledTime,
+                        durationMinutes: task?.durationMinutes || 60,
+                        scheduledDate: startDateStr
+                    }
+                })
 
-            if (result.error) {
-                toast.error(result.error)
-                return
-            }
+            const result = await scheduleUserTasks(tasksForAI, hours, preferences, 1, startDateStr, dayExisting)
 
-            const scheduleData = result.schedule
-            const promises = []
+            if (result.error) { toast.error(result.error); return }
 
-            if (scheduleData.scheduled_tasks) {
-                for (const item of scheduleData.scheduled_tasks) {
-                    promises.push(scheduleStudyTask(user.uid, item.task_id, new Date(`${item.scheduled_date}T${item.scheduled_time}`), item.scheduled_time))
+            const { scheduled_tasks = [], unscheduled_tasks = [] } = result.schedule as any
+
+            // Enrich preview with task details
+            const enriched: ScheduledPreviewItem[] = scheduled_tasks.map((item: any) => {
+                const task = existingTasks.find(t => t.id === item.task_id)
+                return {
+                    ...item,
+                    title: task?.title || item.task_id,
+                    subject: task?.subject || "",
+                    priority: task?.priority || "Medium"
                 }
-            }
+            }).sort((a: any, b: any) => a.scheduled_time.localeCompare(b.scheduled_time))
 
-            await Promise.all(promises)
-            toast.success(`Scheduled ${scheduleData.scheduled_tasks?.length || 0} tasks for ${targetDate}!`)
-            onClose()
+            setPreview(enriched)
+            setSkipped(unscheduled_tasks)
 
         } catch (e: any) {
-            toast.error(e.message)
+            toast.error(e.message || "Failed to generate schedule")
         } finally {
             setLoading(false)
         }
     }
 
-    if (existingTasks.length === 0) {
-        return (
-            <div className="space-y-4 py-4">
-                <div className="text-center p-6 bg-muted/20 rounded-lg">
-                    <p className="text-muted-foreground mb-4">You don't have any study tasks yet.</p>
-                    <p className="text-sm">Please close this and add tasks manually using the "Add Task" button first.</p>
-                </div>
-                <Button onClick={onClose} variant="outline" className="w-full">Close</Button>
-            </div>
-        )
+    const handleConfirm = async () => {
+        if (!preview || !user) return
+        setSaving(true)
+        try {
+            // Schedule sequentially to keep proper ordering
+            for (const item of preview) {
+                await scheduleStudyTask(
+                    user.uid,
+                    item.task_id,
+                    new Date(`${item.scheduled_date}T00:00:00`),
+                    item.scheduled_time
+                )
+            }
+            toast.success(`Scheduled ${preview.length} task${preview.length !== 1 ? "s" : ""} successfully!`)
+            onClose()
+        } catch (e: any) {
+            toast.error(e.message || "Failed to save schedule")
+        } finally {
+            setSaving(false)
+        }
     }
 
-    return (
+    if (existingTasks.length === 0) return (
         <div className="space-y-4 py-4">
-            <div className="p-4 bg-muted/20 rounded-lg mb-4">
-                <p className="font-medium text-sm mb-2">You have {existingTasks.length} total tasks.</p>
-                <p className="text-xs text-muted-foreground">The AI will scale tasks into <strong>{targetDate}</strong>.</p>
+            <div className="text-center p-6 bg-muted/20 rounded-lg">
+                <p className="text-muted-foreground mb-2">No unscheduled tasks found.</p>
+                <p className="text-sm text-muted-foreground">Add tasks first using the "Add Task" button, then use AI to schedule them.</p>
+            </div>
+            <Button onClick={onClose} variant="outline" className="w-full">Close</Button>
+        </div>
+    )
+
+    // ── Preview screen ────────────────────────────────────────────────────────
+    if (preview) return (
+        <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">{preview.length} task{preview.length !== 1 ? "s" : ""} scheduled — review before saving</p>
+                <Button variant="ghost" size="sm" onClick={() => setPreview(null)} className="text-xs">← Edit</Button>
+            </div>
+
+            <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1">
+                {preview.map((item, i) => (
+                    <div key={item.task_id} className="flex items-center gap-3 p-3 border rounded-lg bg-card text-sm">
+                        <div className={`w-1 h-10 rounded-full flex-shrink-0 ${item.priority === "High" ? "bg-red-500" : item.priority === "Medium" ? "bg-orange-500" : "bg-yellow-500"}`} />
+                        <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{item.title}</div>
+                            <div className="text-xs text-muted-foreground">{item.subject}</div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                            <div className="font-mono text-xs font-semibold">{item.scheduled_time}</div>
+                            <div className="text-xs text-muted-foreground">{item.duration_minutes}m</div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {skipped.length > 0 && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400">
+                    <strong>{skipped.length} task{skipped.length !== 1 ? "s" : ""} couldn't fit</strong> within the {hours}h daily limit and will remain unscheduled.
+                </div>
+            )}
+
+            <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setPreview(null)} disabled={saving}>Regenerate</Button>
+                <Button className="flex-1" onClick={handleConfirm} disabled={saving}>
+                    {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <>Confirm & Save</>}
+                </Button>
+            </div>
+        </div>
+    )
+
+    // ── Setup screen ──────────────────────────────────────────────────────────
+    return (
+        <div className="space-y-4 py-2">
+            <div className="p-3 bg-muted/20 rounded-lg text-sm">
+                <p className="font-medium">{existingTasks.length} unscheduled task{existingTasks.length !== 1 ? "s" : ""} will be arranged for <strong>{new Date(targetDate).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</strong>.</p>
+                <p className="text-xs text-muted-foreground mt-1">High priority tasks go first. Breaks are inserted automatically.</p>
             </div>
 
             <div className="space-y-4">
                 <div className="grid gap-2">
-                    <Label>Daily Study Limit (Hours)</Label>
+                    <Label className="text-sm">Daily Study Limit</Label>
                     <div className="flex items-center gap-4">
-                        <input
-                            type="range"
-                            min="1"
-                            max="12"
-                            step="0.5"
-                            value={hours}
-                            onChange={(e) => setHours(parseFloat(e.target.value))}
-                            className="flex-1"
-                        />
-                        <span className="w-12 text-center font-mono">{hours}h</span>
+                        <input type="range" min="1" max="12" step="0.5" value={hours}
+                            onChange={(e) => setHours(parseFloat(e.target.value))} className="flex-1 accent-primary" />
+                        <span className="w-16 text-center font-mono text-sm font-semibold">{hours}h</span>
                     </div>
+                    <p className="text-xs text-muted-foreground">{Math.floor(hours * 60 / 60)}h {(hours * 60) % 60 > 0 ? `${(hours * 60) % 60}m` : ""} · up to {Math.floor(hours * 60 / 70)} tasks (with breaks)</p>
                 </div>
 
                 <div className="grid gap-2">
-                    <Label>Specific Requests (Optional)</Label>
+                    <Label className="text-sm">Your Preferences <span className="text-muted-foreground font-normal">(optional)</span></Label>
                     <textarea
-                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        placeholder='e.g. "Focus on Math", "No breaks on Tuesday", "Finish Biology first"'
+                        className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        placeholder='e.g. "Focus on Math first", "Short sessions only", "Prioritize Biology before Physics"'
                         value={preferences}
                         onChange={(e) => setPreferences(e.target.value)}
                     />
                 </div>
             </div>
 
-            <Button onClick={handleGenerate} disabled={loading} className="w-full mt-4">
-                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Scheduling...</> : <><Sparkles className="mr-2 h-4 w-4" /> Schedule for {targetDate}</>}
+            <Button onClick={handleGenerate} disabled={loading} className="w-full">
+                {loading
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating schedule...</>
+                    : <><Sparkles className="mr-2 h-4 w-4" />Generate Schedule</>}
             </Button>
         </div>
     )

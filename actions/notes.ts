@@ -2,252 +2,220 @@
 
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
-// ✅ FIX: Use 'require' to bypass TypeScript errors
-const PDFParser = require("pdf2json");
-const mammoth = require("mammoth");
+const PDFParser = require("pdf2json")
+const mammoth = require("mammoth")
 
 export async function processAndSummarizeNote(
-    fileUrl: string, 
-    fileType: string, 
-    options?: { outputType?: string, tone?: string, length?: string }
+    fileUrl: string,
+    fileType: string,
+    options?: { outputType?: string; specialInstructions?: string }
 ) {
-    if (!fileUrl) return { error: "No file URL provided" }
+    if (!fileUrl) return { success: false, error: "No file URL provided" }
 
     try {
-        // --- 1. Download File ---
+        // ── 1. Download file ────────────────────────────────────────────────
         const fileResponse = await fetch(fileUrl)
-        if (!fileResponse.ok) throw new Error("Failed to download file from storage")
+        if (!fileResponse.ok) throw new Error(`Failed to download file (${fileResponse.status})`)
 
         const arrayBuffer = await fileResponse.arrayBuffer()
         const buffer = Buffer.from(arrayBuffer)
 
-        // --- 2. Extract Text ---
-        let text = ""
+        // ── 2. Extract text ─────────────────────────────────────────────────
+        let rawText = ""
 
         if (fileType.includes("pdf")) {
-            text = await new Promise<string>((resolve, reject) => {
-                const pdfParser = new PDFParser(null, 1);
-
-                pdfParser.on("pdfParser_dataError", (errData: any) => {
-                    console.error("❌ PDF Parse Error:", errData.parserError);
-                    reject(errData.parserError);
-                });
-
-                pdfParser.on("pdfParser_dataReady", () => {
-                    const raw = pdfParser.getRawTextContent();
-                    resolve(raw);
-                });
-
-                pdfParser.parseBuffer(buffer);
-            });
-
-        } else if (fileType.includes("word") || fileType.includes("docx") || fileType.includes("officedocument")) {
-            const result = await mammoth.extractRawText({ buffer });
-            text = result.value;
-
+            rawText = await new Promise<string>((resolve, reject) => {
+                const pdfParser = new PDFParser(null, 1)
+                pdfParser.on("pdfParser_dataError", (e: any) => reject(new Error(e.parserError)))
+                pdfParser.on("pdfParser_dataReady", () => resolve(pdfParser.getRawTextContent()))
+                pdfParser.parseBuffer(buffer)
+            })
+        } else if (
+            fileType.includes("word") ||
+            fileType.includes("docx") ||
+            fileType.includes("officedocument")
+        ) {
+            const result = await mammoth.extractRawText({ buffer })
+            rawText = result.value
         } else if (fileType.includes("text") || fileType.includes("plain")) {
-            text = buffer.toString("utf-8");
+            rawText = buffer.toString("utf-8")
         } else {
-            return { error: "Unsupported file type." }
+            return { success: false, error: "Unsupported file type. Use PDF, DOCX, or TXT." }
         }
 
-        text = text.replace(/\s+/g, " ").trim();
+        // ── 3. Clean text — preserve paragraphs ────────────────────────────
+        const text = rawText
+            .replace(/\r\n/g, "\n")
+            .replace(/\n{3,}/g, "\n\n")                    // max 2 consecutive blank lines
+            .replace(/[ \t]+/g, " ")                        // collapse horizontal whitespace only
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // strip only true control chars; keep UTF-8 (accents, Greek, math symbols)
+            .trim()
 
         if (!text || text.length < 50) {
-            return { error: "Could not read text. Is this a scanned PDF? Please use text-based files." }
+            return {
+                success: false,
+                error: "Could not extract readable text. This may be a scanned/image PDF. Please use a text-based file."
+            }
         }
 
+        // ── 4. Build prompt from options ────────────────────────────────────
+        const { outputType = "Bullet points", specialInstructions = "" } = options || {}
+
+        // Output-type-specific instructions + expected JSON shape
+        const outputConfigs: Record<string, { instruction: string; shape: object }> = {
+            "Bullet points": {
+                instruction: "Summarize the document as clear, concise bullet points covering all the main ideas.",
+                shape: {
+                    title: "[Document topic] — Summary",
+                    emoji: "📝",
+                    summary: "2–3 sentence overview of the entire document.",
+                    keyPoints: ["Key point 1", "Key point 2", "Key point 3", "Key point 4", "Key point 5"],
+                    actionItems: ["Action item 1", "Action item 2"]
+                }
+            },
+            "Detailed notes": {
+                instruction: "Create comprehensive, detailed notes that cover every important concept, section, and detail from the document.",
+                shape: {
+                    title: "[Topic] — Detailed Notes",
+                    emoji: "📖",
+                    summary: "Complete overview of all topics covered.",
+                    keyPoints: [
+                        "Section 1: [detailed explanation]",
+                        "Subsection: [explanation]",
+                        "Key fact: [detail]",
+                        "Section 2: [detailed explanation]",
+                        "Key fact: [detail]"
+                    ],
+                    actionItems: ["Review section headings", "Create a mind map", "Identify gaps in understanding"]
+                }
+            },
+            "Short notes": {
+                instruction: "Create a concise bullet-point quick reference. Maximum 8 key points, each under 15 words.",
+                shape: {
+                    title: "Quick Notes: [topic]",
+                    emoji: "⚡",
+                    summary: "Ultra-brief overview in 1 sentence.",
+                    keyPoints: ["Point 1", "Point 2", "Point 3", "Point 4", "Point 5", "Point 6"],
+                    actionItems: ["Review before exam", "Expand unclear points"]
+                }
+            },
+            "Exam prep": {
+                instruction: "Create a structured exam preparation guide with likely exam questions and key concepts.",
+                shape: {
+                    title: "Exam Prep: [topic]",
+                    emoji: "🎓",
+                    summary: "Key topics and what to focus on for the exam.",
+                    keyPoints: [
+                        "Topic 1: [key concept]",
+                        "Topic 2: [key concept]",
+                        "Topic 3: [key concept]",
+                        "Likely exam question: [question] — Model answer: [answer]",
+                        "Likely exam question: [question] — Model answer: [answer]",
+                        "Formula/Definition to memorize: [item]"
+                    ],
+                    actionItems: ["Make flashcards for key terms", "Practice past papers", "Review weak areas first"]
+                }
+            },
+            "Quiz": {
+                instruction: `Generate exactly 10 multiple-choice quiz questions (MCQs) strictly based on the document content.
+Each question must have EXACTLY 4 options labelled A, B, C, D.
+Only ONE option is correct.
+Include a one-sentence explanation for the correct answer.
+Questions must cover a broad range of topics from the document, not just the introduction.`,
+                shape: {
+                    title: "Quiz: [topic from document]",
+                    emoji: "❓",
+                    summary: "10 multiple-choice questions covering the key concepts from this document.",
+                    keyPoints: [],
+                    actionItems: ["Review incorrect answers", "Retake the quiz to test retention"],
+                    questions: [
+                        {
+                            q: "Question text here?",
+                            options: ["A. First option", "B. Second option", "C. Third option", "D. Fourth option"],
+                            answer: "A",
+                            explanation: "One sentence explaining why A is correct."
+                        },
+                        {
+                            q: "Another question?",
+                            options: ["A. Option", "B. Option", "C. Option", "D. Option"],
+                            answer: "C",
+                            explanation: "One sentence explaining why C is correct."
+                        }
+                    ]
+                }
+            },
+            "Assignment guide": {
+                instruction: "Create a structured assignment-writing guide from the content.",
+                shape: {
+                    title: "Assignment Guide: [topic]",
+                    emoji: "📋",
+                    summary: "How to approach and complete this assignment successfully.",
+                    keyPoints: [
+                        "Key concept to address: [concept]",
+                        "Suggested intro: [what to include]",
+                        "Main body points: [points]",
+                        "Suggested conclusion: [what to include]",
+                        "Common mistake to avoid: [mistake]"
+                    ],
+                    actionItems: ["Outline your assignment before writing", "Cite all sources", "Proofread for clarity"]
+                }
+            },
+            "Paragraph": {
+                instruction: "Write a flowing, well-structured paragraph summary that captures the full meaning of the document.",
+                shape: {
+                    title: "[Topic] — Summary",
+                    emoji: "📄",
+                    summary: "[Write a full flowing paragraph summary here]",
+                    keyPoints: ["Main argument: [point]", "Supporting evidence: [point]", "Conclusion: [point]"],
+                    actionItems: ["Identify the main thesis", "Note supporting arguments"]
+                }
+            }
+        }
+
+        const config = outputConfigs[outputType] || outputConfigs["Bullet points"]
+
+        const prompt = `You are an expert academic assistant. ${config.instruction}
+${specialInstructions?.trim() ? `\nADDITIONAL INSTRUCTIONS FROM USER: ${specialInstructions.trim()}\n` : ""}
+You MUST return a single valid JSON object matching this exact structure. Fill every field with real content from the document — do not leave placeholders:
+${JSON.stringify(config.shape, null, 2)}
+
+DOCUMENT TEXT (${text.length.toLocaleString()} chars):
+${text.slice(0, 28000)}`
+
+        // ── 5. Call Groq with response_format to guarantee valid JSON ────────
         const model = getGroqModel()
-
-        const { outputType = "Bullet points", tone = "Academic", length = "Medium" } = options || {}
-
-        // Map tone to instruction
-        const toneMap: Record<string, string> = {
-            "Academic": "Use formal, academic language with precise terminology.",
-            "Casual": "Use simple, friendly, conversational language as if explaining to a classmate.",
-            "Professional": "Use professional, concise business language."
-        }
-        const toneInstruction = toneMap[tone] || toneMap["Academic"]
-
-        // Map length to word count
-        const lengthMap: Record<string, string> = {
-            "Short": "Keep the summary very concise, around 100-150 words total.",
-            "Medium": "Aim for a moderate length, around 250-350 words total.",
-            "Long": "Be comprehensive and detailed, around 500-600 words total."
-        }
-        const lengthInstruction = lengthMap[length] || lengthMap["Medium"]
-
-        // Build output-type-specific prompt
-        let outputInstruction = ""
-        let jsonStructure = ""
-
-        if (outputType === "Quiz" || outputType === "Q&A") {
-            outputInstruction = "Generate exactly 10 quiz questions with answers based on the document."
-            jsonStructure = `{
-    "title": "Quiz: [topic]",
-    "emoji": "❓",
-    "summary": "A 1-sentence overview of what this quiz covers.",
-    "keyPoints": [
-        "Q1: [question] | A1: [answer]",
-        "Q2: [question] | A2: [answer]",
-        "Q3: [question] | A3: [answer]",
-        "Q4: [question] | A4: [answer]",
-        "Q5: [question] | A5: [answer]",
-        "Q6: [question] | A6: [answer]",
-        "Q7: [question] | A7: [answer]",
-        "Q8: [question] | A8: [answer]",
-        "Q9: [question] | A9: [answer]",
-        "Q10: [question] | A10: [answer]"
-    ],
-    "actionItems": ["Review questions you got wrong", "Repeat the quiz after 24 hours"]
-}`
-        } else if (outputType === "Exam prep") {
-            outputInstruction = "Create a structured exam preparation guide."
-            jsonStructure = `{
-    "title": "Exam Prep: [topic]",
-    "emoji": "🎓",
-    "summary": "Key topics and what to focus on for the exam.",
-    "keyPoints": [
-        "Topic 1: [key concept to know]",
-        "Topic 2: [key concept to know]",
-        "Topic 3: [key concept to know]",
-        "Topic 4: [key concept to know]",
-        "Likely exam question: [question with model answer]",
-        "Likely exam question: [question with model answer]",
-        "Formula/Definition to memorize: [item]",
-        "Formula/Definition to memorize: [item]"
-    ],
-    "actionItems": ["Make flashcards for key terms", "Practice past papers", "Review weak areas first"]
-}`
-        } else if (outputType === "Assignment guide") {
-            outputInstruction = "Create a structured assignment help guide from the content."
-            jsonStructure = `{
-    "title": "Assignment Guide: [topic]",
-    "emoji": "📋",
-    "summary": "How to approach and complete this assignment successfully.",
-    "keyPoints": [
-        "Key concept to address: [concept]",
-        "Key concept to address: [concept]",
-        "Key concept to address: [concept]",
-        "Suggested structure: Introduction — [what to include]",
-        "Suggested structure: Main Body — [what to include]",
-        "Suggested structure: Conclusion — [what to include]",
-        "Important point to include: [point]",
-        "Common mistake to avoid: [mistake]"
-    ],
-    "actionItems": ["Outline your assignment before writing", "Cite all sources", "Proofread for clarity"]
-}`
-        } else if (outputType === "Detailed notes") {
-            outputInstruction = `Create comprehensive, detailed notes with all important information. ${lengthInstruction}`
-            jsonStructure = `{
-    "title": "[Document topic] — Detailed Notes",
-    "emoji": "📖",
-    "summary": "Complete overview of all topics covered.",
-    "keyPoints": [
-        "## [Section 1 heading]: [detailed explanation]",
-        "### [Subsection]: [explanation]",
-        "Key fact: [important detail]",
-        "Key fact: [important detail]",
-        "Key fact: [important detail]",
-        "## [Section 2 heading]: [detailed explanation]",
-        "Key fact: [important detail]",
-        "Key fact: [important detail]"
-    ],
-    "actionItems": ["Review section headings", "Create a mind map of connections", "Identify gaps in understanding"]
-}`
-        } else if (outputType === "Short notes") {
-            outputInstruction = "Create a concise bullet-point quick reference. Maximum 8 key points, each under 15 words."
-            jsonStructure = `{
-    "title": "Quick Notes: [topic]",
-    "emoji": "⚡",
-    "summary": "Ultra-brief overview in 1 sentence.",
-    "keyPoints": [
-        "Point 1 (max 15 words)",
-        "Point 2 (max 15 words)",
-        "Point 3 (max 15 words)",
-        "Point 4 (max 15 words)",
-        "Point 5 (max 15 words)",
-        "Point 6 (max 15 words)"
-    ],
-    "actionItems": ["Review before exam", "Expand on unclear points"]
-}`
-        } else if (outputType === "Flashcards layout") {
-            outputInstruction = "Generate 10 flashcard pairs from the document content."
-            jsonStructure = `{
-    "title": "Flashcards: [topic]",
-    "emoji": "🗂",
-    "summary": "10 flashcard pairs covering the main concepts.",
-    "keyPoints": [
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]",
-        "FRONT: [term or question] | BACK: [definition or answer]"
-    ],
-    "actionItems": ["Study front side first", "Test yourself without looking at back"]
-}`
-        } else if (outputType === "Paragraph") {
-            outputInstruction = `Write a flowing paragraph summary. ${lengthInstruction}`
-            jsonStructure = `{
-    "title": "[Topic] — Summary",
-    "emoji": "📄",
-    "summary": "[Write a full flowing paragraph summary here, not bullet points]",
-    "keyPoints": ["Main argument: [point]", "Supporting evidence: [point]", "Conclusion: [point]"],
-    "actionItems": ["Identify the main thesis", "Note supporting arguments"]
-}`
-        } else {
-            // Default: Bullet points summary
-            outputInstruction = `Summarize the document as clear bullet points. ${lengthInstruction}`
-            jsonStructure = `{
-    "title": "[Document topic] — Summary",
-    "emoji": "📝",
-    "summary": "2-3 sentence overview of the entire document.",
-    "keyPoints": [
-        "Key point 1",
-        "Key point 2",
-        "Key point 3",
-        "Key point 4",
-        "Key point 5"
-    ],
-    "actionItems": ["Action item 1", "Action item 2"]
-}`
-        }
-
-        const prompt = `You are an expert academic assistant. ${outputInstruction}
-
-TONE: ${toneInstruction}
-
-Return ONLY valid JSON with NO markdown, NO code fences, NO explanation. Use exactly this structure:
-${jsonStructure}
-
-Replace all placeholder text in brackets with real content from the document.
-
-Document Content:
-${text.slice(0, 100000)}`
-
         const result = await model.chat.completions.create({
             model: GROQ_MODEL,
-            messages: [{ role: "user", content: prompt }]
-        });
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+            temperature: 0.3,
+        })
 
-        const textResponse = result.choices[0]?.message?.content || "";
-        const jsonString = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
+        const content = result.choices[0]?.message?.content || "{}"
 
+        let parsedData: any
         try {
-            const parsedData = JSON.parse(jsonString)
-            return { success: true, data: parsedData, extractedText: text }
-        } catch (e) {
-            console.error("JSON Error", jsonString)
-            return { error: "AI response format error." }
+            parsedData = JSON.parse(content)
+        } catch {
+            console.error("JSON parse failed:", content.slice(0, 300))
+            return { success: false, error: "AI returned an invalid response. Please try again." }
         }
 
+        // Validate required fields
+        if (!parsedData.title || !parsedData.summary) {
+            return { success: false, error: "AI summary was incomplete. Please try again." }
+        }
+
+        // Ensure arrays
+        parsedData.keyPoints   = Array.isArray(parsedData.keyPoints)   ? parsedData.keyPoints   : []
+        parsedData.actionItems = Array.isArray(parsedData.actionItems) ? parsedData.actionItems : []
+        parsedData.questions   = Array.isArray(parsedData.questions)   ? parsedData.questions   : []
+        if (!parsedData.emoji) parsedData.emoji = "📄"
+
+        return { success: true, data: parsedData, extractedText: text.slice(0, 5000) }
+
     } catch (error: any) {
-        console.error("Processing Error:", error)
-        return { error: error.message || "Failed to process document" }
+        console.error("Note processing error:", error)
+        return { success: false, error: error.message || "Failed to process document" }
     }
 }

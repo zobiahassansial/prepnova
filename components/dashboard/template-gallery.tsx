@@ -35,10 +35,21 @@ const templates: TemplateOption[] = [
 
 const coverTemplates: TemplateOption[] = [
     { id: "basic", name: "Basic", description: "Simple & clean", thumbnailClass: "bg-white p-2 flex flex-col gap-1 border shadow-sm" },
-    { id: "template_modern_pro", name: "Modern Pro", description: "Bold & professional", thumbnailClass: "bg-white p-0 flex flex-col shadow-sm" },
-    { id: "template_sidebar", name: "Sidebar", description: "Structured layout", thumbnailClass: "bg-white flex flex-row shadow-sm h-full" },
-    { id: "template_minimal_elegant", name: "Minimal Elegant", description: "Refined serif style", thumbnailClass: "bg-[#fcfbf9] p-2 flex flex-col items-center shadow-sm" },
-    { id: "template_creative_blocks", name: "Creative Blocks", description: "Unique section headers", thumbnailClass: "bg-white p-2 flex flex-col gap-2 shadow-sm" },
+    { id: "classic", name: "Classic", description: "Professional serif", thumbnailClass: "bg-white p-2 border" },
+    { id: "modern", name: "Modern", description: "Navy accent bar", thumbnailClass: "bg-white p-2 border" },
+    { id: "minimal", name: "Minimal", description: "Ultra-clean", thumbnailClass: "bg-white p-2 border" },
+    { id: "executive", name: "Executive", description: "Dark header + gold", thumbnailClass: "bg-white p-2 border" },
+    { id: "creative", name: "Creative", description: "Teal header", thumbnailClass: "bg-white p-2 border" },
+    { id: "compact", name: "Compact", description: "Dense layout", thumbnailClass: "bg-white p-2 border" },
+    { id: "two-column", name: "Two Column", description: "Dark sidebar", thumbnailClass: "bg-white p-2 border" },
+    { id: "sidebar", name: "Sidebar", description: "Purple accent", thumbnailClass: "bg-white p-2 border" },
+    { id: "elegant", name: "Elegant", description: "Gold dividers", thumbnailClass: "bg-white p-2 border" },
+    { id: "bold", name: "Bold", description: "Black + amber", thumbnailClass: "bg-white p-2 border" },
+    { id: "academic", name: "Academic", description: "Navy formal", thumbnailClass: "bg-white p-2 border" },
+    { id: "tech", name: "Tech", description: "Dark + green", thumbnailClass: "bg-white p-2 border" },
+    { id: "clean", name: "Clean", description: "Card-based", thumbnailClass: "bg-white p-2 border" },
+    { id: "timeline", name: "Timeline", description: "Purple accent", thumbnailClass: "bg-white p-2 border" },
+    { id: "infographic", name: "Infographic", description: "Visual header", thumbnailClass: "bg-white p-2 border" },
 ]
 
 interface TemplateGalleryProps {
@@ -243,11 +254,11 @@ const TemplateSVG = memo(function TemplateSVG({ id, type = "resume" }: { id: str
                     </div>
                 )
             default:
-                return <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">Preview</div>
+                break // fall through to the resume SVG renderer below
         }
     }
 
-    // Resume SVG Previews
+    // Resume SVG Previews (also used as fallback for cover letter thumbnails)
     switch (id) {
         case "classic":
             return (

@@ -77,9 +77,12 @@ const SheetContent = React.forwardRef<
 ))
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
+const SheetTitle = SheetPrimitive.Title
+
 export {
     Sheet,
     SheetTrigger,
     SheetClose,
     SheetContent,
+    SheetTitle,
 }

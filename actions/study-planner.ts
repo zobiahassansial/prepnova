@@ -280,6 +280,55 @@ export async function deleteAllScheduledTasks(userId: string) {
 }
 
 /**
+ * Clears all tasks for a specific day.
+ * Completed tasks → permanently deleted.
+ * Incomplete tasks → unscheduled (moved back to the unscheduled pool).
+ */
+export async function clearDayTasks(userId: string, dateStr: string) {
+    const startOfDay = new Date(dateStr + "T00:00:00")
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(dateStr + "T00:00:00")
+    endOfDay.setHours(23, 59, 59, 999)
+
+    const schedSnap = await adminDb.collection(SCHEDULE_COLLECTION)
+        .where("userId", "==", userId)
+        .get()
+
+    const dayDocs = schedSnap.docs.filter(d => {
+        const raw = d.data().scheduledDate
+        const sd = raw?.toDate ? raw.toDate() : new Date(raw)
+        return sd >= startOfDay && sd <= endOfDay
+    })
+
+    if (dayDocs.length === 0) return
+
+    const batch = adminDb.batch()
+
+    for (const schedDoc of dayDocs) {
+        const { taskId } = schedDoc.data()
+        // Always remove the schedule entry
+        batch.delete(schedDoc.ref)
+
+        if (taskId) {
+            const taskSnap = await adminDb.collection(TASKS_COLLECTION).doc(taskId).get()
+            if (taskSnap.exists) {
+                const status = taskSnap.data()?.status
+                if (status === "completed") {
+                    // Permanently delete completed tasks
+                    batch.delete(taskSnap.ref)
+                } else {
+                    // Unschedule incomplete tasks
+                    batch.update(taskSnap.ref, { status: "unscheduled", updatedAt: Timestamp.now() })
+                }
+            }
+        }
+    }
+
+    await batch.commit()
+    await logStudyActivity(userId, "BATCH", "deleted", `Cleared all tasks for ${dateStr}`)
+}
+
+/**
  * Deletes ALL unscheduled tasks PERMANENTLY.
  * Removes tasks with status='unscheduled'.
  */

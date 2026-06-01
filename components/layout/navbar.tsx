@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { Brain, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { usePathname } from "next/navigation"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -70,6 +71,9 @@ export function Navbar() {
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                            <VisuallyHidden>
+                                <SheetTitle>Navigation Menu</SheetTitle>
+                            </VisuallyHidden>
                             <div className="flex flex-col gap-6 mt-8">
                                 <Link href="/" className="font-medium text-lg border-b pb-2">Home</Link>
                                 <Link href="#features" className="font-medium text-lg border-b pb-2">Tools</Link>

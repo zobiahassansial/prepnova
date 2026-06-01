@@ -19,12 +19,14 @@ import { formatDistanceToNow } from "date-fns"
 const activityIconMap: Record<string, string> = {
     study_session: "📚",
     task_complete: "✅",
+    task_created: "📝",
     deck_created: "🃏",
     deck_reviewed: "🔄",
     resume_created: "📄",
     resume_saved: "💾",
     summary_generated: "✨",
     doc_scanned: "🔍",
+    interview_practice: "🎤",
 }
 
 // Progress bar color based on threshold
