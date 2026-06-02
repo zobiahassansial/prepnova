@@ -85,9 +85,13 @@ export default function DocumentScannerPage() {
 
             // 2. Call OCR/AI API
             setScanState("processing")
+            const token = await user?.getIdToken()
             const response = await fetch("/api/scan", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
                 body: JSON.stringify({ fileUrl: downloadURL, fileType: file.type }),
             })
 

@@ -257,7 +257,7 @@ export default function Home() {
                                 </div>
                                 <p className="text-muted-foreground mb-6 italic text-lg leading-relaxed">"{t.quote}"</p>
                                 <div className="flex items-center gap-3">
-                                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-400"></div>
+                                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-muted to-muted-foreground/30"></div>
                                     <div>
                                         <p className="font-bold text-sm">{t.author}</p>
                                         <p className="text-xs text-muted-foreground">{t.role}</p>

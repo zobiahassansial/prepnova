@@ -17,7 +17,7 @@ export function Navbar() {
     return (
         // Changed layout: Now it's fixed with padding to create the "Floating" effect
         <header className="fixed top-0 left-0 right-0 z-50 flex justify-center p-4">
-            <div className="flex w-full max-w-7xl items-center justify-between rounded-full border border-white/20 bg-background/70 px-6 py-3 shadow-xl backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 dark:border-white/10 dark:bg-black/50">
+            <div className="flex w-full max-w-7xl items-center justify-between rounded-full border border-border/40 bg-background/70 px-6 py-3 shadow-xl backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 dark:border-white/10 dark:bg-black/50">
                 
                 {/* Logo Section */}
                 <Link className="flex items-center gap-2 font-bold text-xl hover:opacity-80 transition-opacity" href="/">
@@ -31,14 +31,18 @@ export function Navbar() {
 
                 {/* Desktop Navigation - Centered & Clean */}
                 <nav className="hidden md:flex items-center gap-8">
-                    {["Home", "Tools", "Learning Hub"].map((item) => (
+                    {[
+                        { label: "Home", href: "/" },
+                        { label: "Tools", href: "#features" },
+                        { label: "Learning Hub", href: "#" },
+                        { label: "Contact Us", href: "/contact" },
+                    ].map((item) => (
                         <Link
-                            key={item}
+                            key={item.label}
                             className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group"
-                            href={item === "Home" ? "/" : item === "Tools" ? "#features" : "#"}
+                            href={item.href}
                         >
-                            {item}
-                            {/* Hover Underline Animation */}
+                            {item.label}
                             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all group-hover:w-full"></span>
                         </Link>
                     ))}
@@ -78,6 +82,7 @@ export function Navbar() {
                                 <Link href="/" className="font-medium text-lg border-b pb-2">Home</Link>
                                 <Link href="#features" className="font-medium text-lg border-b pb-2">Tools</Link>
                                 <Link href="#" className="font-medium text-lg border-b pb-2">Learning Hub</Link>
+                                <Link href="/contact" className="font-medium text-lg border-b pb-2">Contact Us</Link>
                                 
                                 <div className="flex items-center justify-between border-b pb-4 pt-2">
                                     <span className="font-medium text-lg text-muted-foreground">App Theme</span>

@@ -77,7 +77,7 @@ export function OnboardingForm() {
                         <div className={`h-2 w-full rounded-full ${step >= 2 ? 'bg-primary' : 'bg-muted'}`}></div>
                         <div className={`h-2 w-full rounded-full ${step >= 3 ? 'bg-primary' : 'bg-muted'}`}></div>
                     </div>
-                    <CardTitle>Welcome to PrepNova! 👋</CardTitle>
+                    <CardTitle>Welcome to PrepNova!</CardTitle>
                     <CardDescription>Let's personalize your experience.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">

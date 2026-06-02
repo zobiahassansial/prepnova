@@ -1,76 +1,93 @@
-import { db } from "@/lib/firebase"
-import { doc, getDoc, setDoc, increment, updateDoc } from "firebase/firestore"
+import "server-only"
+import { adminDb } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
+import { PLAN_LIMITS, type PlanKey, type FeatureKey, getUpgradePlan } from "@/lib/plan-config"
 
-export const PLAN_LIMITS = {
-    free: {
-        resumes: 3,
-        summaries: 5,
-        flashcards: 3,
-        studyPlanner: "basic",
-        interviewPrep: false
-    },
-    standard: {
-        resumes: 10,
-        summaries: 15,
-        flashcards: 50, // "Flashcards AI generation" implied access + reasonable limit
-        studyPlanner: "full",
-        interviewPrep: false
-    },
-    pro: {
-        resumes: 20,
-        summaries: 25,
-        flashcards: 9999,
-        studyPlanner: "full",
-        interviewPrep: true
-    },
-    lifetime: {
-        resumes: 999999,
-        summaries: 999999,
-        flashcards: 999999,
-        studyPlanner: "full",
-        interviewPrep: true
+function currentMonth(): string {
+    return new Date().toISOString().slice(0, 7) // "2026-06"
+}
+
+export async function getUserPlan(userId: string): Promise<PlanKey> {
+    const snap = await adminDb
+        .collection("users")
+        .doc(userId)
+        .collection("subscription")
+        .doc("info")
+        .get()
+    const plan = snap.exists ? (snap.data()?.plan as PlanKey) : "free"
+    return (plan in PLAN_LIMITS) ? plan : "free"
+}
+
+export async function getUsage(userId: string): Promise<Record<FeatureKey, number>> {
+    const month = currentMonth()
+    const snap = await adminDb
+        .collection("users")
+        .doc(userId)
+        .collection("usage")
+        .doc(month)
+        .get()
+    const d = snap.exists ? snap.data()! : {}
+    return {
+        resumes: d.resumes || 0,
+        summaries: d.summaries || 0,
+        flashcards: d.flashcards || 0,
+        interviews: d.interviews || 0,
+        scanPages: d.scanPages || 0,
     }
 }
 
-export async function getUserSubscription(userId: string) {
-    if (process.env.NODE_ENV === "development") {
-        return { plan: "pro", status: "active" }
+export async function checkLimit(
+    userId: string,
+    feature: FeatureKey,
+    amount = 1
+): Promise<{ allowed: boolean; used: number; limit: number; error?: string }> {
+    const plan = await getUserPlan(userId)
+    const limits = PLAN_LIMITS[plan]
+    const limit = limits[feature] as number
+
+    if (limit === 0) {
+        return {
+            allowed: false,
+            used: 0,
+            limit: 0,
+            error: `${feature === "interviews" ? "Interview Prep" : feature === "scanPages" ? "Document Scanner" : feature} is not available on the ${plan === "free" ? "Free" : plan} plan. Upgrade to ${getUpgradePlan(plan)}.`,
+        }
     }
 
-    const subRef = doc(db, "users", userId, "subscription", "info")
-    const snap = await getDoc(subRef)
+    const usage = await getUsage(userId)
+    const used = usage[feature]
 
-    if (snap.exists()) {
-        return snap.data() // { plan: 'free', ... }
-    } else {
-        // Default to free
-        return { plan: "free" }
+    if (used + amount > limit) {
+        return {
+            allowed: false,
+            used,
+            limit,
+            error: `You've used ${used}/${limit} ${feature} this month. Upgrade to ${getUpgradePlan(plan)} for more.`,
+        }
     }
+
+    return { allowed: true, used, limit }
 }
 
-export async function checkLimit(userId: string, feature: "resumes" | "summaries" | "flashcards") {
-    if (process.env.NODE_ENV === "development") {
-        return { allowed: true, remaining: 999999 }
-    }
-
-    const sub = await getUserSubscription(userId)
-    const plan = sub.plan || "free"
-    const limit = (PLAN_LIMITS as any)[plan]?.[feature] || 0
-
-    // Get current usage
-    const usageRef = doc(db, "users", userId, "usage", feature)
-    const usageSnap = await getDoc(usageRef)
-    const used = usageSnap.exists() ? usageSnap.data().count : 0
-
-    if (used >= limit) {
-        return { allowed: false, error: `Upgrade to ${plan === 'free' ? 'Standard' : 'Pro'} to get more ${feature}.` }
-    }
-
-    return { allowed: true, remaining: limit - used }
+export async function incrementUsage(userId: string, feature: FeatureKey, amount = 1): Promise<void> {
+    const month = currentMonth()
+    await adminDb
+        .collection("users")
+        .doc(userId)
+        .collection("usage")
+        .doc(month)
+        .set({ [feature]: FieldValue.increment(amount) }, { merge: true })
 }
 
-export async function incrementUsage(userId: string, feature: "resumes" | "summaries" | "flashcards") {
-    const usageRef = doc(db, "users", userId, "usage", feature)
-    // Use setDoc with merge to handle creation if missing
-    await setDoc(usageRef, { count: increment(1) }, { merge: true })
+export async function decrementUsage(userId: string, feature: FeatureKey, amount = 1): Promise<void> {
+    const month = currentMonth()
+    await adminDb
+        .collection("users")
+        .doc(userId)
+        .collection("usage")
+        .doc(month)
+        .set({ [feature]: FieldValue.increment(-amount) }, { merge: true })
 }
+
+export { PLAN_LIMITS, getUpgradePlan }
+export type { PlanKey, FeatureKey }

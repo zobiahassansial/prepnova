@@ -18,13 +18,13 @@ import { useUserPlan } from "@/hooks/useUserPlan"
 import { UpgradeModal } from "@/components/pricing/upgrade-modal"
 
 const OUTPUT_TYPES = [
-    { value: "Bullet points",    label: "Bullet Points",    emoji: "📝", desc: "Clear, scannable key points" },
-    { value: "Detailed notes",   label: "Detailed Notes",   emoji: "📖", desc: "Full coverage of all topics" },
-    { value: "Short notes",      label: "Short Notes",      emoji: "⚡", desc: "Ultra-brief quick reference" },
-    { value: "Exam prep",        label: "Exam Prep",        emoji: "🎓", desc: "Questions & key concepts" },
-    { value: "Quiz",             label: "Quiz",             emoji: "❓", desc: "10 Q&A from the material" },
-    { value: "Assignment guide", label: "Assignment Guide", emoji: "📋", desc: "Structured writing help" },
-    { value: "Paragraph",        label: "Paragraph",        emoji: "📄", desc: "Flowing prose summary" },
+    { value: "Bullet points",    label: "Bullet Points",    desc: "Clear, scannable key points" },
+    { value: "Detailed notes",   label: "Detailed Notes",   desc: "Full coverage of all topics" },
+    { value: "Short notes",      label: "Short Notes",      desc: "Ultra-brief quick reference" },
+    { value: "Exam prep",        label: "Exam Prep",        desc: "Questions & key concepts" },
+    { value: "Quiz",             label: "Quiz",             desc: "10 Q&A from the material" },
+    { value: "Assignment guide", label: "Assignment Guide", desc: "Structured writing help" },
+    { value: "Paragraph",        label: "Paragraph",        desc: "Flowing prose summary" },
 ]
 
 export default function NoteSummarizerPage() {
@@ -117,7 +117,7 @@ export default function NoteSummarizerPage() {
             await addDoc(collection(db, "users", user.uid, "activityLog"), {
                 type:        "summary_generated",
                 description: `Summarised: "${selectedFile.name}"`,
-                icon:        "✨",
+                icon:        "",
                 timestamp:   Timestamp.now(),
             })
 
@@ -192,7 +192,6 @@ export default function NoteSummarizerPage() {
                                             onClick={() => router.push(`/dashboard/note-summarizer/${s.id}`)}
                                         >
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <span className="text-xl">{s.emoji || "📄"}</span>
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-medium truncate">{s.title || s.fileName}</p>
                                                     <p className="text-xs text-muted-foreground">{s.outputType || "Summary"} · {s.keyPoints?.length || 0} points</p>

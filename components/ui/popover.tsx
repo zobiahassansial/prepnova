@@ -11,8 +11,22 @@ const PopoverContext = React.createContext<{
     setOpen: () => { },
 })
 
-const Popover = ({ children }: { children: React.ReactNode }) => {
-    const [open, setOpen] = React.useState(false)
+const Popover = ({
+    children,
+    open: controlledOpen,
+    onOpenChange,
+}: {
+    children: React.ReactNode
+    open?: boolean
+    onOpenChange?: React.Dispatch<React.SetStateAction<boolean>>
+}) => {
+    const [internalOpen, setInternalOpen] = React.useState(false)
+    const isControlled = controlledOpen !== undefined
+    const open = isControlled ? controlledOpen : internalOpen
+    const setOpen: React.Dispatch<React.SetStateAction<boolean>> = (value) => {
+        if (!isControlled) setInternalOpen(value)
+        onOpenChange?.(value)
+    }
     const ref = React.useRef<HTMLDivElement>(null)
 
     React.useEffect(() => {

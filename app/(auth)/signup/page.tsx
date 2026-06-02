@@ -346,14 +346,14 @@ export default function SignupPage() {
                                     onClick={() => setUserType('student')}
                                     className={`py-3 rounded-xl text-sm font-medium transition-all ${userType === 'student' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground border border-input'}`}
                                 >
-                                    🎓 Student
+                                    Student
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setUserType('professional')}
                                     className={`py-3 rounded-xl text-sm font-medium transition-all ${userType === 'professional' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground border border-input'}`}
                                 >
-                                    💼 Professional
+                                    Professional
                                 </button>
                             </div>
 

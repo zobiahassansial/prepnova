@@ -38,7 +38,6 @@ const INITIAL_MSG = (type: string) => {
 export default function MockInterviewPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params)
     const interviewType = INTERVIEW_TYPES[id] ? id : "behavioral"
-    const { user } = useRouter ? { user: null } : { user: null }
     const { user: authUser } = useAuth()
     const router = useRouter()
 
@@ -203,7 +202,7 @@ export default function MockInterviewPage({ params }: { params: Promise<{ id: st
                 {/* Pro tip */}
                 {feedback.tip && (
                     <div className="p-4 rounded-xl border bg-primary/5 border-primary/20 text-sm">
-                        <span className="font-semibold text-primary">💡 Pro Tip: </span>
+                        <span className="font-semibold text-primary">Pro Tip: </span>
                         <span className="text-muted-foreground">{feedback.tip}</span>
                     </div>
                 )}

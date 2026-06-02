@@ -1,6 +1,9 @@
 "use server"
 
+import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
+import { checkLimit, incrementUsage, decrementUsage, getUserPlan } from "@/lib/limits"
+import { PLAN_LIMITS } from "@/lib/plan-config"
 
 const PDFParser = require("pdf2json")
 const mammoth = require("mammoth")
@@ -8,9 +11,17 @@ const mammoth = require("mammoth")
 export async function processAndSummarizeNote(
     fileUrl: string,
     fileType: string,
-    options?: { outputType?: string; specialInstructions?: string }
+    options?: { outputType?: string; specialInstructions?: string; tone?: string; length?: string }
 ) {
     if (!fileUrl) return { success: false, error: "No file URL provided" }
+
+    // ── Auth + quota check ────────────────────────────────────────────────────
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "Authentication required." }
+    const userId = session.user.id
+
+    const quota = await checkLimit(userId, "summaries")
+    if (!quota.allowed) return { success: false, error: quota.error, upgradeRequired: true }
 
     try {
         // ── 1. Download file ────────────────────────────────────────────────
@@ -58,7 +69,19 @@ export async function processAndSummarizeNote(
             }
         }
 
-        // ── 4. Build prompt from options ────────────────────────────────────
+        // ── 4. Word limit enforcement ───────────────────────────────────────
+        const plan = await getUserPlan(userId)
+        const maxWords = PLAN_LIMITS[plan].summaryMaxWords
+        const wordCount = text.split(/\s+/).length
+        if (wordCount > maxWords) {
+            return {
+                success: false,
+                error: `Your ${plan} plan supports up to ${maxWords.toLocaleString()} words per summary. This document has ~${wordCount.toLocaleString()} words. Upgrade for a higher limit.`,
+                upgradeRequired: true,
+            }
+        }
+
+        // ── 5. Build prompt from options ─────────────────────────────────────
         const { outputType = "Bullet points", specialInstructions = "" } = options || {}
 
         // Output-type-specific instructions + expected JSON shape
@@ -67,7 +90,6 @@ export async function processAndSummarizeNote(
                 instruction: "Summarize the document as clear, concise bullet points covering all the main ideas.",
                 shape: {
                     title: "[Document topic] — Summary",
-                    emoji: "📝",
                     summary: "2–3 sentence overview of the entire document.",
                     keyPoints: ["Key point 1", "Key point 2", "Key point 3", "Key point 4", "Key point 5"],
                     actionItems: ["Action item 1", "Action item 2"]
@@ -77,7 +99,6 @@ export async function processAndSummarizeNote(
                 instruction: "Create comprehensive, detailed notes that cover every important concept, section, and detail from the document.",
                 shape: {
                     title: "[Topic] — Detailed Notes",
-                    emoji: "📖",
                     summary: "Complete overview of all topics covered.",
                     keyPoints: [
                         "Section 1: [detailed explanation]",
@@ -93,7 +114,6 @@ export async function processAndSummarizeNote(
                 instruction: "Create a concise bullet-point quick reference. Maximum 8 key points, each under 15 words.",
                 shape: {
                     title: "Quick Notes: [topic]",
-                    emoji: "⚡",
                     summary: "Ultra-brief overview in 1 sentence.",
                     keyPoints: ["Point 1", "Point 2", "Point 3", "Point 4", "Point 5", "Point 6"],
                     actionItems: ["Review before exam", "Expand unclear points"]
@@ -103,7 +123,6 @@ export async function processAndSummarizeNote(
                 instruction: "Create a structured exam preparation guide with likely exam questions and key concepts.",
                 shape: {
                     title: "Exam Prep: [topic]",
-                    emoji: "🎓",
                     summary: "Key topics and what to focus on for the exam.",
                     keyPoints: [
                         "Topic 1: [key concept]",
@@ -124,7 +143,6 @@ Include a one-sentence explanation for the correct answer.
 Questions must cover a broad range of topics from the document, not just the introduction.`,
                 shape: {
                     title: "Quiz: [topic from document]",
-                    emoji: "❓",
                     summary: "10 multiple-choice questions covering the key concepts from this document.",
                     keyPoints: [],
                     actionItems: ["Review incorrect answers", "Retake the quiz to test retention"],
@@ -148,7 +166,6 @@ Questions must cover a broad range of topics from the document, not just the int
                 instruction: "Create a structured assignment-writing guide from the content.",
                 shape: {
                     title: "Assignment Guide: [topic]",
-                    emoji: "📋",
                     summary: "How to approach and complete this assignment successfully.",
                     keyPoints: [
                         "Key concept to address: [concept]",
@@ -164,7 +181,6 @@ Questions must cover a broad range of topics from the document, not just the int
                 instruction: "Write a flowing, well-structured paragraph summary that captures the full meaning of the document.",
                 shape: {
                     title: "[Topic] — Summary",
-                    emoji: "📄",
                     summary: "[Write a full flowing paragraph summary here]",
                     keyPoints: ["Main argument: [point]", "Supporting evidence: [point]", "Conclusion: [point]"],
                     actionItems: ["Identify the main thesis", "Note supporting arguments"]
@@ -182,14 +198,22 @@ ${JSON.stringify(config.shape, null, 2)}
 DOCUMENT TEXT (${text.length.toLocaleString()} chars):
 ${text.slice(0, 28000)}`
 
-        // ── 5. Call Groq with response_format to guarantee valid JSON ────────
+        // ── 6. Deduct credit then call Groq ──────────────────────────────────
+        await incrementUsage(userId, "summaries")
+
         const model = getGroqModel()
-        const result = await model.chat.completions.create({
-            model: GROQ_MODEL,
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-            temperature: 0.3,
-        })
+        let result: any
+        try {
+            result = await model.chat.completions.create({
+                model: GROQ_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" },
+                temperature: 0.3,
+            })
+        } catch (aiError) {
+            await decrementUsage(userId, "summaries")
+            throw aiError
+        }
 
         const content = result.choices[0]?.message?.content || "{}"
 
@@ -197,12 +221,14 @@ ${text.slice(0, 28000)}`
         try {
             parsedData = JSON.parse(content)
         } catch {
+            await decrementUsage(userId, "summaries")
             console.error("JSON parse failed:", content.slice(0, 300))
             return { success: false, error: "AI returned an invalid response. Please try again." }
         }
 
         // Validate required fields
         if (!parsedData.title || !parsedData.summary) {
+            await decrementUsage(userId, "summaries")
             return { success: false, error: "AI summary was incomplete. Please try again." }
         }
 
@@ -210,7 +236,6 @@ ${text.slice(0, 28000)}`
         parsedData.keyPoints   = Array.isArray(parsedData.keyPoints)   ? parsedData.keyPoints   : []
         parsedData.actionItems = Array.isArray(parsedData.actionItems) ? parsedData.actionItems : []
         parsedData.questions   = Array.isArray(parsedData.questions)   ? parsedData.questions   : []
-        if (!parsedData.emoji) parsedData.emoji = "📄"
 
         return { success: true, data: parsedData, extractedText: text.slice(0, 5000) }
 

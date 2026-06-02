@@ -19,16 +19,16 @@ export const WelcomeBanner = memo(function WelcomeBanner({ name, photoURL, strea
                             </div>
                         )}
                         <div className="space-y-1">
-                            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                            Welcome back, {name}! <Sparkles className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                        </h2>
-                            <p className="text-muted-foreground">
+                            <h2 className="text-xl md:text-2xl font-bold tracking-tight flex items-center gap-2">
+                                Welcome back, {name}! <Sparkles className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                            </h2>
+                            <p className="text-sm md:text-base text-muted-foreground">
                                 You're on a {streak}-day streak. Keep it up!
                             </p>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        <Button>
+                    <div className="flex gap-2 w-full md:w-auto">
+                        <Button className="w-full md:w-auto">
                             Continue Study Plan <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                     </div>

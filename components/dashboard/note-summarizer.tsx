@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "firebase/auth"
 import { collection, onSnapshot, query, where, addDoc, Timestamp } from "firebase/firestore"
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 import { logActivity } from "@/lib/logger"
-import { checkQuota, incrementQuota } from "@/lib/subscription"
+import { checkClientQuota, incrementClientUsage } from "@/lib/usage-client"
 import { UpgradeModal } from "@/components/pricing/upgrade-modal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Download, File as FileIcon, Printer } from "lucide-react"
@@ -104,7 +104,7 @@ export function NoteSummarizer() {
         }
 
         // 1. Quota Check
-        const allowed = await checkQuota(user.uid, "summary")
+        const allowed = await checkClientQuota(user.uid, "summaries").then(r => r.allowed)
         if (!allowed) {
             setShowUpgrade(true)
             return
@@ -151,7 +151,7 @@ export function NoteSummarizer() {
 
                 let aiSummary = "No summary generated."
                 if (result.data) {
-                    aiSummary = `${result.data.emoji || '📝'} ${result.data.title || 'Summary'}\n\n` +
+                    aiSummary = `${result.data.title || 'Summary'}\n\n` +
                                 `Overview:\n${result.data.summary}\n\n` +
                                 `Key Points:\n${(result.data.keyPoints || []).map((p: string) => '- ' + p).join('\n')}\n\n` +
                                 `Action Items:\n${(result.data.actionItems || []).map((p: string) => '- ' + p).join('\n')}`
@@ -170,7 +170,7 @@ export function NoteSummarizer() {
 
                 await logActivity(user.uid, "summary_generated", `Summarized note: "${file.name}"`)
 
-                await incrementQuota(user.uid, "summary")
+                await incrementClientUsage(user.uid, "summaries")
 
                 setIsUploading(false)
                 toast.success("Summary generated successfully!")
@@ -197,8 +197,8 @@ export function NoteSummarizer() {
                 />
             )}
 
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold tracking-tight">AI Note Summarizer</h1>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">AI Note Summarizer</h1>
                 <div className="text-sm text-muted-foreground">{summaries.length} summaries saved</div>
             </div>
 
@@ -211,7 +211,7 @@ export function NoteSummarizer() {
                             <CardDescription>Upload PDF, DOCX, or Images. AI will summarize them instantly.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-3 gap-3 mb-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-medium text-muted-foreground">Output Type</label>
                                     <Select value={outputType} onValueChange={setOutputType}>
@@ -219,15 +219,15 @@ export function NoteSummarizer() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Bullet points">📝 Bullet Points</SelectItem>
-                                            <SelectItem value="Paragraph">📄 Paragraph</SelectItem>
-                                            <SelectItem value="Q&A">❓ Q&amp;A</SelectItem>
-                                            <SelectItem value="Flashcards layout">🗂 Flashcards</SelectItem>
-                                            <SelectItem value="Quiz">🎯 Quiz (10 Qs)</SelectItem>
-                                            <SelectItem value="Assignment guide">📋 Assignment Guide</SelectItem>
-                                            <SelectItem value="Exam prep">🎓 Exam Prep</SelectItem>
-                                            <SelectItem value="Detailed notes">📖 Detailed Notes</SelectItem>
-                                            <SelectItem value="Short notes">⚡ Short Notes</SelectItem>
+                                            <SelectItem value="Bullet points">Bullet Points</SelectItem>
+                                            <SelectItem value="Paragraph">Paragraph</SelectItem>
+                                            <SelectItem value="Q&A">Q&amp;A</SelectItem>
+                                            <SelectItem value="Flashcards layout">Flashcards</SelectItem>
+                                            <SelectItem value="Quiz">Quiz (10 Qs)</SelectItem>
+                                            <SelectItem value="Assignment guide">Assignment Guide</SelectItem>
+                                            <SelectItem value="Exam prep">Exam Prep</SelectItem>
+                                            <SelectItem value="Detailed notes">Detailed Notes</SelectItem>
+                                            <SelectItem value="Short notes">Short Notes</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

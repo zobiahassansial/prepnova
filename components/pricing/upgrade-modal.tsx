@@ -8,27 +8,27 @@ import Link from "next/link"
 interface UpgradeModalProps {
     feature: string
     description?: string
-    requiredPlan?: "standard" | "pro" | "lifetime"
+    requiredPlan?: "standard" | "pro" | "max"
     onClose?: () => void
-    inline?: boolean // If true, renders as inline card, not overlay
+    inline?: boolean
 }
 
-const planFeatures = {
-    standard: ["10 Resume Generations", "15 AI Summaries / month", "Full Study Planner", "Flashcards AI Generation"],
-    pro: ["20 Resume Generations", "25 AI Summaries / month", "Interview Prep Access", "All AI Features", "Priority Support"],
-    lifetime: ["Everything in Pro", "Unlimited Everything", "Future Updates Included"],
+const planFeatures: Record<string, string[]> = {
+    standard: ["5 Resume Generations / month", "20 AI Summaries / month", "15 Flashcard Decks / month", "Full Study Planner", "Document Scanner (20 pages)", "5 AI Mock Interviews / month"],
+    pro:      ["15 Resume Generations / month", "50 AI Summaries / month", "40 Flashcard Decks / month", "Full Study Planner", "Document Scanner (100 pages)", "10 AI Mock Interviews + live support"],
+    max:      ["30 Resume Generations / month", "120 AI Summaries / month", "100 Flashcard Decks / month", "Full Study Planner", "Document Scanner (300 pages)", "20 AI Mock Interviews + Priority Support"],
 }
 
-const planPrices = {
-    standard: "$7/mo",
-    pro: "$15/mo",
-    lifetime: "$199 one-time",
+const planPrices: Record<string, string> = {
+    standard: "$5.99/mo",
+    pro:      "$11.99/mo",
+    max:      "$19.99/mo",
 }
 
-const planColors = {
+const planColors: Record<string, string> = {
     standard: "text-blue-600",
-    pro: "text-primary",
-    lifetime: "text-yellow-600",
+    pro:      "text-primary",
+    max:      "text-yellow-600",
 }
 
 export function UpgradeModal({ feature, description, requiredPlan = "pro", onClose, inline = false }: UpgradeModalProps) {
@@ -66,7 +66,7 @@ export function UpgradeModal({ feature, description, requiredPlan = "pro", onClo
                             <span className="text-sm font-medium text-muted-foreground">{planPrices[requiredPlan]}</span>
                         </div>
                         <ul className="space-y-2">
-                            {planFeatures[requiredPlan].map(f => (
+                            {(planFeatures[requiredPlan] ?? []).map(f => (
                                 <li key={f} className="flex items-center gap-2 text-sm">
                                     <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
                                     <span>{f}</span>
@@ -76,9 +76,9 @@ export function UpgradeModal({ feature, description, requiredPlan = "pro", onClo
                     </div>
 
                     <div className="flex gap-2">
-                        <Link href="/#pricing" className="flex-1">
+                        <Link href={`/checkout?plan=${requiredPlan}&billing=monthly`} className="flex-1">
                             <Button className="w-full gap-2">
-                                View Plans <ArrowRight className="h-4 w-4" />
+                                Upgrade Now <ArrowRight className="h-4 w-4" />
                             </Button>
                         </Link>
                         {onClose && (

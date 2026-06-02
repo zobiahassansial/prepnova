@@ -25,7 +25,7 @@ export function DashboardSkeleton() {
 
             {/* Charts & Activity Skeleton */}
             <div className="grid grid-cols-1 md:grid-cols-7 gap-6">
-                <Card className="col-span-4">
+                <Card className="md:col-span-4">
                     <CardHeader>
                         <Skeleton className="h-6 w-32 mb-2" />
                         <Skeleton className="h-4 w-48" />
@@ -34,7 +34,7 @@ export function DashboardSkeleton() {
                         <Skeleton className="h-[300px] w-full" />
                     </CardContent>
                 </Card>
-                <Card className="col-span-3">
+                <Card className="md:col-span-3">
                     <CardHeader>
                         <Skeleton className="h-6 w-32 mb-2" />
                         <Skeleton className="h-4 w-48" />

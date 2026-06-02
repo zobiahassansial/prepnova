@@ -3,33 +3,42 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@/components/providers/auth-provider"
 import { db } from "@/lib/firebase"
-import { doc, onSnapshot, collection, getCountFromServer, query, where } from "firebase/firestore"
+import { doc, onSnapshot, getDoc } from "firebase/firestore"
 import { PlanType, PlanLimits, UsageData, Subscription } from "@/types"
 
-export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
+// Plan limits matching lib/plan-config.ts — kept here for client-side use
+const PLAN_LIMITS: Record<string, PlanLimits> = {
     free: {
-        resumes: 3,
-        summaries: 5,
+        resumes: 1,
+        summaries: 3,
         flashcards: 3,
         studyPlanner: "basic",
         interviewPrep: false,
-        storage: 500 * 1024 * 1024, // 500 MB
+        storage: 500 * 1024 * 1024,
     },
     standard: {
-        resumes: 10,
-        summaries: 15,
-        flashcards: 50,
-        studyPlanner: "full",
-        interviewPrep: false,
-        storage: 1 * 1024 * 1024 * 1024, // 1 GB
-    },
-    pro: {
-        resumes: 20,
-        summaries: 25,
-        flashcards: 9999,
+        resumes: 5,
+        summaries: 20,
+        flashcards: 15,
         studyPlanner: "full",
         interviewPrep: true,
-        storage: 3 * 1024 * 1024 * 1024, // 3 GB
+        storage: 1 * 1024 * 1024 * 1024,
+    },
+    pro: {
+        resumes: 15,
+        summaries: 50,
+        flashcards: 40,
+        studyPlanner: "full",
+        interviewPrep: true,
+        storage: 3 * 1024 * 1024 * 1024,
+    },
+    max: {
+        resumes: 30,
+        summaries: 120,
+        flashcards: 100,
+        studyPlanner: "full",
+        interviewPrep: true,
+        storage: 3 * 1024 * 1024 * 1024,
     },
     lifetime: {
         resumes: 999999,
@@ -37,9 +46,11 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
         flashcards: 999999,
         studyPlanner: "full",
         interviewPrep: true,
-        storage: 3 * 1024 * 1024 * 1024, // 3 GB
+        storage: 3 * 1024 * 1024 * 1024,
     },
 }
+
+const FREE_LIMITS = PLAN_LIMITS.free
 
 interface UserPlanState {
     plan: PlanType
@@ -69,7 +80,7 @@ export function useUserPlan(): UserPlanState {
             return
         }
 
-        // Listen to subscription
+        // Listen to subscription in real-time
         const subUnsub = onSnapshot(
             doc(db, "users", user.uid, "subscription", "info"),
             (snap) => {
@@ -88,27 +99,23 @@ export function useUserPlan(): UserPlanState {
             }
         )
 
-        // Fetch usage counts
+        // Read monthly usage from users/{uid}/usage/{YYYY-MM}
         const fetchUsage = async () => {
             try {
-                const [resumesSnap, summariesSnap, decksSnap] = await Promise.all([
-                    getCountFromServer(query(collection(db, "users", user.uid, "resumes"))),
-                    getCountFromServer(query(collection(db, "users", user.uid, "usage", "summaries" as any))),
-                    getCountFromServer(query(collection(db, "users", user.uid, "flashcardDecks"))),
-                ])
-
-                // Summaries usage stored as doc count in summaries collection
-                const summariesCount = await getCountFromServer(
-                    query(collection(db, "users", user.uid, "summaries"))
-                )
-
-                setUsage({
-                    resumes: resumesSnap.data().count,
-                    summaries: summariesCount.data().count,
-                    flashcards: decksSnap.data().count,
-                })
+                const month = new Date().toISOString().slice(0, 7)
+                const usageSnap = await getDoc(doc(db, "users", user.uid, "usage", month))
+                if (usageSnap.exists()) {
+                    const d = usageSnap.data()
+                    setUsage({
+                        resumes: d.resumes || 0,
+                        summaries: d.summaries || 0,
+                        flashcards: d.flashcards || 0,
+                    })
+                } else {
+                    setUsage({ resumes: 0, summaries: 0, flashcards: 0 })
+                }
             } catch {
-                // Silently handle — usage is non-critical
+                setUsage({ resumes: 0, summaries: 0, flashcards: 0 })
             } finally {
                 setLoading(false)
             }
@@ -116,22 +123,12 @@ export function useUserPlan(): UserPlanState {
 
         fetchUsage()
 
-        return () => {
-            subUnsub()
-        }
+        return () => subUnsub()
     }, [user])
 
-    const isBypass = process.env.NODE_ENV === "development"
-
-    if (isBypass) {
-        console.log("DEV MODE: premium access enabled for current user")
-    }
-
-    const currentPlan = isBypass ? "pro" : plan
-    const currentLimits = PLAN_LIMITS[currentPlan]
+    const currentLimits: PlanLimits = PLAN_LIMITS[plan] ?? FREE_LIMITS
 
     const canAccess = (feature: keyof PlanLimits): boolean => {
-        if (isBypass) return true
         const val = currentLimits[feature]
         if (typeof val === "boolean") return val
         if (typeof val === "number") return val > 0
@@ -139,29 +136,28 @@ export function useUserPlan(): UserPlanState {
     }
 
     const isAtLimit = (feature: "resumes" | "summaries" | "flashcards"): boolean => {
-        if (isBypass) return false
         const used = usage[feature] ?? 0
         const limit = currentLimits[feature] as number
         return used >= limit
     }
 
-    const upgradeRequired = (feature: keyof PlanLimits): boolean => {
-        if (isBypass) return false
-        return !canAccess(feature)
-    }
+    const upgradeRequired = (feature: keyof PlanLimits): boolean => !canAccess(feature)
+
+    const isPremium = plan !== "free"
+    const isPro = plan === "pro" || plan === "max" || plan === "lifetime"
 
     return {
-        plan: currentPlan,
+        plan,
         limits: currentLimits,
         usage,
         subscription,
-        loading: isBypass ? false : loading, // Force loading to false in bypass so UI doesn't block
+        loading,
         canAccess,
         isAtLimit,
         upgradeRequired,
-        subscriptionStatus: isBypass ? "active" : undefined,
-        isPremium: isBypass ? true : undefined,
-        isPro: isBypass ? true : undefined,
-        canUseAI: isBypass ? true : undefined,
+        isPremium,
+        isPro,
+        canUseAI: isPro,
+        subscriptionStatus: subscription?.status,
     }
 }

@@ -13,13 +13,13 @@ import {
 import { toast } from "sonner"
 
 const OUTPUT_TYPES = [
-    { value: "Bullet points",    label: "Bullet Points",    emoji: "📝" },
-    { value: "Detailed notes",   label: "Detailed Notes",   emoji: "📖" },
-    { value: "Short notes",      label: "Short Notes",      emoji: "⚡" },
-    { value: "Exam prep",        label: "Exam Prep",        emoji: "🎓" },
-    { value: "Quiz",             label: "Quiz",             emoji: "❓" },
-    { value: "Assignment guide", label: "Assignment Guide", emoji: "📋" },
-    { value: "Paragraph",        label: "Paragraph",        emoji: "📄" },
+    { value: "Bullet points",    label: "Bullet Points" },
+    { value: "Detailed notes",   label: "Detailed Notes" },
+    { value: "Short notes",      label: "Short Notes" },
+    { value: "Exam prep",        label: "Exam Prep" },
+    { value: "Quiz",             label: "Quiz" },
+    { value: "Assignment guide", label: "Assignment Guide" },
+    { value: "Paragraph",        label: "Paragraph" },
 ]
 
 export default function SummaryResultPage({ params }: { params: Promise<{ summaryId: string }> }) {
@@ -244,7 +244,7 @@ export default function SummaryResultPage({ params }: { params: Promise<{ summar
                                         <div className="flex-1">
                                             <p className="font-bold text-lg">{correct}/{questions.length} correct</p>
                                             <p className="text-sm text-muted-foreground">
-                                                {correct === questions.length ? "Perfect score! 🎉" :
+                                                {correct === questions.length ? "Perfect score!" :
                                                  correct >= questions.length * 0.7 ? "Great job! Review the ones you missed." :
                                                  "Keep studying — retake the quiz to improve your score."}
                                             </p>

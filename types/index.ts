@@ -21,7 +21,7 @@ export interface UserProfile {
 }
 
 // ─── Subscription ─────────────────────────────────────────────────────────────
-export type PlanType = "free" | "standard" | "pro" | "lifetime"
+export type PlanType = "free" | "standard" | "pro" | "max" | "lifetime"
 
 export interface Subscription {
     plan: PlanType

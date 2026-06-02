@@ -22,7 +22,6 @@ import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
 import { generateStudyPlan, scheduleUserTasks } from "@/actions/ai-planner"
 import { createStudyTask, logStudyActivity, scheduleStudyTask, unscheduleStudyTask, checkScheduleConflict, checkDailyLimit, deleteStudyTask, deleteAllScheduledTasks, deleteAllUnscheduledTasks, updateTaskOrder, clearDayTasks } from "@/actions/study-planner"
-import { checkLimit, incrementUsage, getUserSubscription } from "@/lib/limits"
 import { db, auth } from "@/lib/firebase"
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, Timestamp, getDoc } from "firebase/firestore"
 import { logActivity } from "@/lib/logger"
@@ -399,10 +398,10 @@ export function StudyPlanner() {
 
     return (
         <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Study Planner</h1>
-                    <p className="text-muted-foreground">Drag and drop tasks to organize your schedule.</p>
+                    <h1 className="text-xl md:text-2xl font-bold tracking-tight">Study Planner</h1>
+                    <p className="text-sm text-muted-foreground">Drag and drop tasks to organize your schedule.</p>
                 </div>
                 <div className="flex gap-2">
                     <Button
@@ -627,7 +626,7 @@ export function StudyPlanner() {
                                     {/* All-done banner */}
                                     {allDayDone && (
                                         <div className="flex items-center justify-between p-3 mb-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm">
-                                            <span className="font-medium">🎉 All tasks completed for this day!</span>
+                                            <span className="font-medium">All tasks completed for this day!</span>
                                             <Button
                                                 size="sm"
                                                 variant="ghost"

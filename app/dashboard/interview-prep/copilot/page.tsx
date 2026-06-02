@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useAuth } from "@/components/providers/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Mic, MicOff, Zap, Sparkles, PictureInPicture, PictureInPicture2, BrainCircuit, MonitorPlay, Loader2 } from "lucide-react"
@@ -20,6 +21,7 @@ const CW = 800
 const CH = 450
 
 export default function InterviewCopilotPage() {
+  const { user } = useAuth()
   const [isListening, setIsListening]   = useState(false)
   const [transcript, setTranscript]     = useState("")
   const [suggestion, setSuggestion]     = useState("Waiting for question...")
@@ -65,7 +67,7 @@ export default function InterviewCopilotPage() {
     ctx.fillStyle = isLoad ? "#eab308" : "#10b981"
     ctx.font = "bold 14px Arial"
     ctx.textAlign = "left"
-    ctx.fillText(isLoad ? "⏳  GENERATING ANSWER..." : "💡  AI SUGGESTED ANSWER", 24, 34)
+    ctx.fillText(isLoad ? "GENERATING ANSWER..." : "AI SUGGESTED ANSWER", 24, 34)
 
     // Divider
     ctx.fillStyle = "#1f1f1f"
@@ -256,9 +258,13 @@ export default function InterviewCopilotPage() {
     setTranscript("") // clear so next question is fresh
 
     try {
+      const token = await user?.getIdToken()
       const res = await fetch("/api/interview-answer", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ transcript: query }),
       })
 

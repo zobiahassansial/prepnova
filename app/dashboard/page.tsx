@@ -15,19 +15,6 @@ import {
 } from "firebase/firestore"
 import { formatDistanceToNow } from "date-fns"
 
-// Activity icon map
-const activityIconMap: Record<string, string> = {
-    study_session: "📚",
-    task_complete: "✅",
-    task_created: "📝",
-    deck_created: "🃏",
-    deck_reviewed: "🔄",
-    resume_created: "📄",
-    resume_saved: "💾",
-    summary_generated: "✨",
-    doc_scanned: "🔍",
-    interview_practice: "🎤",
-}
 
 // Progress bar color based on threshold
 function getProgressColor(pct: number) {
@@ -289,7 +276,7 @@ export default function DashboardPage() {
                     <CardContent>
                         <div className="text-2xl font-bold">{tasksCompleted}</div>
                         <p className="text-xs text-muted-foreground">
-                            {streak} day streak 🔥
+                            {streak} day streak
                         </p>
                     </CardContent>
                 </Card>
@@ -322,7 +309,7 @@ export default function DashboardPage() {
             {/* ── Bottom Row ──────────────────────────────────────────────────── */}
             <div className="grid grid-cols-1 md:grid-cols-7 gap-6">
                 {/* Weekly Activity Chart */}
-                <Card className="col-span-4">
+                <Card className="md:col-span-4">
                     <CardHeader>
                         <CardTitle>Weekly Activity</CardTitle>
                         <CardDescription>Your study time over the last 7 days.</CardDescription>
@@ -333,7 +320,7 @@ export default function DashboardPage() {
                 </Card>
 
                 {/* Recent Activity Feed */}
-                <Card className="col-span-3">
+                <Card className="md:col-span-3">
                     <CardHeader>
                         <CardTitle>Recent Activity</CardTitle>
                         <CardDescription>Your latest actions.</CardDescription>
@@ -349,15 +336,14 @@ export default function DashboardPage() {
                             ) : (
                                 recentActivity.map((log: any, i) => {
                                     const ts = log.timestamp?.toDate ? log.timestamp.toDate() : new Date()
-                                    const icon = log.icon || activityIconMap[log.type] || "📌"
                                     return (
                                         <div
                                             key={log.id}
                                             className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-1 duration-200"
                                             style={{ animationDelay: `${i * 30}ms` }}
                                         >
-                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm shrink-0">
-                                                {icon}
+                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                                <div className="h-2 w-2 rounded-full bg-primary" />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-medium leading-tight truncate">

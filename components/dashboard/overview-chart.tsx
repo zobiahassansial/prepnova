@@ -44,7 +44,6 @@ export const OverviewChart = memo(function OverviewChart({ data, loading }: Over
     if (!data || data.length === 0 || data.every(d => d.total === 0)) {
         return (
             <div className="flex flex-col items-center justify-center h-[350px] text-muted-foreground gap-3">
-                <div className="text-4xl opacity-30">📊</div>
                 <p className="text-sm">No activity yet this week.</p>
                 <p className="text-xs">Log a study session to see your chart!</p>
             </div>

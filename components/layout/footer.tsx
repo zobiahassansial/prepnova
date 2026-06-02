@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Brain, Instagram, Linkedin, Twitter } from "lucide-react"
+import { Brain } from "lucide-react"
 
 export function Footer() {
     return (
@@ -21,21 +21,6 @@ export function Footer() {
                             Your AI-powered study companion. Ace exams, build resumes, and master new skills faster than ever.
                         </p>
                         
-                        {/* Social Icons */}
-                        <div className="flex items-center gap-4 pt-2">
-                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors hover:scale-110">
-                                <Twitter className="h-5 w-5" />
-                                <span className="sr-only">Twitter</span>
-                            </Link>
-                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors hover:scale-110">
-                                <Instagram className="h-5 w-5" />
-                                <span className="sr-only">Instagram</span>
-                            </Link>
-                            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors hover:scale-110">
-                                <Linkedin className="h-5 w-5" />
-                                <span className="sr-only">LinkedIn</span>
-                            </Link>
-                        </div>
                     </div>
 
                     {/* 2. Links Section (Right Side - Grid) */}
@@ -70,6 +55,9 @@ export function Footer() {
                                 <li>
                                     <Link href="#" className="hover:text-primary transition-colors">Help Center</Link>
                                 </li>
+                                <li>
+                                    <Link href="/contact" className="hover:text-primary transition-colors">Contact Us</Link>
+                                </li>
                             </ul>
                         </div>
 
@@ -78,13 +66,13 @@ export function Footer() {
                             <h4 className="text-sm font-semibold tracking-wider uppercase text-foreground">Legal</h4>
                             <ul className="space-y-3 text-sm text-muted-foreground">
                                 <li>
-                                    <Link href="#" className="hover:text-primary transition-colors">Privacy Policy</Link>
+                                    <Link href="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</Link>
                                 </li>
                                 <li>
-                                    <Link href="#" className="hover:text-primary transition-colors">Terms of Service</Link>
+                                    <Link href="/terms-of-service" className="hover:text-primary transition-colors">Terms of Service</Link>
                                 </li>
                                 <li>
-                                    <Link href="#" className="hover:text-primary transition-colors">Cookie Policy</Link>
+                                    <Link href="/cookie-policy" className="hover:text-primary transition-colors">Cookie Policy</Link>
                                 </li>
                             </ul>
                         </div>
@@ -96,9 +84,9 @@ export function Footer() {
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
                         <p>© {new Date().getFullYear()} PrepNova. All rights reserved.</p>
                         <div className="flex items-center gap-6">
-                            <Link href="#" className="hover:text-primary transition-colors">Privacy</Link>
-                            <Link href="#" className="hover:text-primary transition-colors">Terms</Link>
-                            <Link href="#" className="hover:text-primary transition-colors">Sitemap</Link>
+                            <Link href="/privacy-policy" className="hover:text-primary transition-colors">Privacy</Link>
+                            <Link href="/terms-of-service" className="hover:text-primary transition-colors">Terms</Link>
+                            <Link href="/cookie-policy" className="hover:text-primary transition-colors">Cookies</Link>
                         </div>
                     </div>
                 </div>

@@ -433,18 +433,21 @@ export function SettingsForm() {
         free: "Free Plan",
         standard: "Standard Plan",
         pro: "Pro Plan",
+        max: "Max Plan",
         lifetime: "Lifetime Plan",
     }
 
     return (
         <Tabs defaultValue="profile" className="w-full space-y-6">
-            <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/50 rounded-xl">
-                <TabsTrigger value="profile" className="gap-2 py-3 rounded-lg"><User className="h-4 w-4" /> Profile</TabsTrigger>
-                <TabsTrigger value="security" className="gap-2 py-3 rounded-lg"><Shield className="h-4 w-4" /> Security</TabsTrigger>
-                <TabsTrigger value="uploads" className="gap-2 py-3 rounded-lg"><HardDrive className="h-4 w-4" /> Uploads</TabsTrigger>
-                <TabsTrigger value="preferences" className="gap-2 py-3 rounded-lg"><Settings className="h-4 w-4" /> Prefs</TabsTrigger>
-                <TabsTrigger value="account" className="gap-2 py-3 rounded-lg"><CreditCard className="h-4 w-4" /> Account</TabsTrigger>
-            </TabsList>
+            <div className="w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                <TabsList className="inline-flex w-max min-w-full h-auto p-1 bg-muted/50 rounded-xl">
+                    <TabsTrigger value="profile" className="gap-1.5 py-2.5 px-3 rounded-lg text-xs sm:text-sm"><User className="h-4 w-4 shrink-0" /><span className="hidden sm:inline">Profile</span><span className="sm:hidden">Profile</span></TabsTrigger>
+                    <TabsTrigger value="security" className="gap-1.5 py-2.5 px-3 rounded-lg text-xs sm:text-sm"><Shield className="h-4 w-4 shrink-0" /><span>Security</span></TabsTrigger>
+                    <TabsTrigger value="uploads" className="gap-1.5 py-2.5 px-3 rounded-lg text-xs sm:text-sm"><HardDrive className="h-4 w-4 shrink-0" /><span>Uploads</span></TabsTrigger>
+                    <TabsTrigger value="preferences" className="gap-1.5 py-2.5 px-3 rounded-lg text-xs sm:text-sm"><Settings className="h-4 w-4 shrink-0" /><span>Prefs</span></TabsTrigger>
+                    <TabsTrigger value="account" className="gap-1.5 py-2.5 px-3 rounded-lg text-xs sm:text-sm"><CreditCard className="h-4 w-4 shrink-0" /><span>Account</span></TabsTrigger>
+                </TabsList>
+            </div>
 
             {/* ─── PROFILE TAB ───────────────────────────────────────────────────── */}
             <TabsContent value="profile" className="space-y-6">
@@ -640,26 +643,7 @@ export function SettingsForm() {
                 </Card>
 
                 {/* Two-Factor Auth */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Two-Factor Authentication</CardTitle>
-                        <CardDescription>Add an extra layer of security to your account.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-                            <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                                    <Shield className="h-5 w-5 text-muted-foreground" />
-                                </div>
-                                <div>
-                                    <p className="font-medium">SMS / Authenticator App</p>
-                                    <p className="text-sm text-muted-foreground">2FA is coming soon to PrepNova.</p>
-                                </div>
-                            </div>
-                            <span className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">Coming Soon</span>
-                        </div>
-                    </CardContent>
-                </Card>
+                <TwoFactorCard />
 
                 {/* Danger Zone */}
                 <Card className="border-red-200 dark:border-red-900">
@@ -672,7 +656,7 @@ export function SettingsForm() {
                     <CardContent className="space-y-4">
                         <div className="p-4 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800 space-y-3">
                             <p className="text-sm text-red-700 dark:text-red-400 font-medium">
-                                ⚠️ All your data (tasks, resumes, flashcards, summaries) will be permanently deleted.
+                                All your data (tasks, resumes, flashcards, summaries) will be permanently deleted.
                             </p>
                             <div className="space-y-2">
                                 <Label className="text-red-700 dark:text-red-400">
@@ -851,10 +835,10 @@ export function SettingsForm() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="English">🇺🇸 English</SelectItem>
-                                    <SelectItem value="Spanish" disabled>🇪🇸 Español (soon)</SelectItem>
-                                    <SelectItem value="French" disabled>🇫🇷 Français (soon)</SelectItem>
-                                    <SelectItem value="Arabic" disabled>🇸🇦 العربية (soon)</SelectItem>
+                                    <SelectItem value="English">English</SelectItem>
+                                    <SelectItem value="Spanish" disabled>Español (coming soon)</SelectItem>
+                                    <SelectItem value="French" disabled>Français (coming soon)</SelectItem>
+                                    <SelectItem value="Arabic" disabled>العربية (coming soon)</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -881,15 +865,21 @@ export function SettingsForm() {
                                     }
                                 </p>
                             </div>
-                            <Link href="/#pricing">
-                                <Button className="gap-2">
-                                    Upgrade Plan <ExternalLink className="h-4 w-4" />
+                            <Link href={
+                                currentPlan === "free" ? "/checkout?plan=standard&billing=monthly"
+                                : currentPlan === "standard" ? "/checkout?plan=pro&billing=monthly"
+                                : currentPlan === "pro" ? "/checkout?plan=max&billing=monthly"
+                                : "/#pricing"
+                            }>
+                                <Button className="gap-2" disabled={currentPlan === "max" || currentPlan === "lifetime"}>
+                                    {currentPlan === "max" || currentPlan === "lifetime" ? "Max Plan Active" : "Upgrade Plan"}
+                                    {currentPlan !== "max" && currentPlan !== "lifetime" && <ExternalLink className="h-4 w-4" />}
                                 </Button>
                             </Link>
                         </div>
 
                         {/* Usage Stats */}
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             {[
                                 { label: "Resumes", used: usage.resumes ?? 0, limit: limits.resumes },
                                 { label: "Summaries", used: usage.summaries ?? 0, limit: limits.summaries },
@@ -960,7 +950,7 @@ export function SettingsForm() {
                                 className="border-orange-300 text-orange-700 hover:bg-orange-50"
                                 onClick={() => {
                                     if (confirm("Are you sure you want to cancel your subscription? You'll keep access until the end of your current billing period.")) {
-                                        toast.info("Cancellation requested. Contact support@prepnova.app to complete cancellation.")
+                                        toast.info("Cancellation requested. Contact support@prepnova.online to complete cancellation.")
                                     }
                                 }}
                             >
@@ -985,5 +975,223 @@ export function SettingsForm() {
                 </Card>
             </TabsContent>
         </Tabs>
+    )
+}
+
+// ─── Two-Factor Authentication Card ──────────────────────────────────────────
+
+type TwoFactorStep = "idle" | "setup" | "verify-enable" | "verify-disable" | "enabled"
+
+function TwoFactorCard() {
+    const { user } = useAuth()
+    const [step, setStep] = useState<TwoFactorStep>("idle")
+    const [is2FAEnabled, setIs2FAEnabled] = useState(false)
+    const [qrCodeDataUrl, setQrCodeDataUrl] = useState("")
+    const [secret, setSecret] = useState("")
+    const [code, setCode] = useState("")
+    const [loading, setLoading] = useState(false)
+    const [checking, setChecking] = useState(true)
+
+    // Fetch current 2FA status
+    useEffect(() => {
+        if (!user) {
+            setChecking(false)
+            return
+        }
+        user.getIdToken()
+            .then(token =>
+                fetch("/api/2fa/status", { headers: { Authorization: `Bearer ${token}` } })
+                    .then(r => r.json())
+                    .then(d => {
+                        setIs2FAEnabled(d.enabled)
+                        setStep(d.enabled ? "enabled" : "idle")
+                    })
+            )
+            .catch(() => { /* silently fall through to idle */ })
+            .finally(() => setChecking(false))
+    }, [user])
+
+    async function startSetup() {
+        if (!user) return
+        setLoading(true)
+        try {
+            const token = await user.getIdToken()
+            const res = await fetch("/api/2fa/setup", { method: "POST", headers: { Authorization: `Bearer ${token}` } })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            setQrCodeDataUrl(data.qrCodeDataUrl)
+            setSecret(data.secret)
+            setStep("setup")
+        } catch (e: any) {
+            toast.error(e.message || "Failed to start setup")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    async function confirmEnable() {
+        if (!user || !code.trim()) return
+        setLoading(true)
+        try {
+            const token = await user.getIdToken()
+            const res = await fetch("/api/2fa/enable", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ code: code.trim() }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            setIs2FAEnabled(true)
+            setStep("enabled")
+            setCode("")
+            toast.success("Two-factor authentication enabled!")
+        } catch (e: any) {
+            toast.error(e.message || "Invalid code")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    async function confirmDisable() {
+        if (!user || !code.trim()) return
+        setLoading(true)
+        try {
+            const token = await user.getIdToken()
+            const res = await fetch("/api/2fa/disable", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ code: code.trim() }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            setIs2FAEnabled(false)
+            setStep("idle")
+            setCode("")
+            toast.success("Two-factor authentication disabled.")
+        } catch (e: any) {
+            toast.error(e.message || "Invalid code")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    if (checking) {
+        return (
+            <Card>
+                <CardContent className="flex items-center justify-center py-10">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Two-Factor Authentication</CardTitle>
+                <CardDescription>Add an extra layer of security using an authenticator app.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+
+                {/* Idle — not enabled */}
+                {step === "idle" && (
+                    <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                                <Shield className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                            <div>
+                                <p className="font-medium">Authenticator App</p>
+                                <p className="text-sm text-muted-foreground">2FA is not enabled on your account.</p>
+                            </div>
+                        </div>
+                        <Button size="sm" onClick={startSetup} disabled={loading}>
+                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Enable 2FA
+                        </Button>
+                    </div>
+                )}
+
+                {/* Enabled */}
+                {step === "enabled" && (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+                                    <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                </div>
+                                <div>
+                                    <p className="font-medium text-green-800 dark:text-green-300">2FA is active</p>
+                                    <p className="text-sm text-green-700/70 dark:text-green-400/70">Your account is protected with an authenticator app.</p>
+                                </div>
+                            </div>
+                            <Button size="sm" variant="outline" className="border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20" onClick={() => { setStep("verify-disable"); setCode("") }}>
+                                Disable
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Setup — show QR code */}
+                {step === "setup" && (
+                    <div className="space-y-5">
+                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                            <p className="text-sm font-medium">Step 1 — Scan this QR code</p>
+                            <p className="text-xs text-muted-foreground">Open Google Authenticator, Authy, or any TOTP app and scan the code below.</p>
+                            {qrCodeDataUrl && (
+                                <div className="flex justify-center">
+                                    <img src={qrCodeDataUrl} alt="2FA QR Code" className="w-44 h-44 rounded-lg border" />
+                                </div>
+                            )}
+                            <p className="text-xs text-muted-foreground text-center">
+                                Can't scan? Enter this key manually:<br />
+                                <span className="font-mono font-semibold text-foreground tracking-widest">{secret}</span>
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-sm font-medium">Step 2 — Enter the 6-digit code from your app</p>
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="000000"
+                                    maxLength={6}
+                                    value={code}
+                                    onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
+                                    className="font-mono text-center text-lg tracking-widest"
+                                />
+                                <Button onClick={confirmEnable} disabled={loading || code.length !== 6}>
+                                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Verify
+                                </Button>
+                            </div>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => { setStep("idle"); setCode("") }}>Cancel</Button>
+                    </div>
+                )}
+
+                {/* Disable — confirm with code */}
+                {step === "verify-disable" && (
+                    <div className="space-y-4">
+                        <div className="p-4 rounded-lg border bg-muted/30 space-y-1">
+                            <p className="text-sm font-medium">Confirm with your authenticator app</p>
+                            <p className="text-xs text-muted-foreground">Enter the current 6-digit code from your app to disable 2FA.</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="000000"
+                                maxLength={6}
+                                value={code}
+                                onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
+                                className="font-mono text-center text-lg tracking-widest"
+                            />
+                            <Button variant="destructive" onClick={confirmDisable} disabled={loading || code.length !== 6}>
+                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Disable
+                            </Button>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => { setStep("enabled"); setCode("") }}>Cancel</Button>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     )
 }

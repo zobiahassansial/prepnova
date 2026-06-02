@@ -11,7 +11,7 @@ import { db } from "@/lib/firebase"
 import { toast } from "sonner"
 import { Eye, FileText, Loader2, Save, Sparkles } from "lucide-react"
 
-import { checkQuota, incrementQuota } from "@/lib/subscription"
+import { checkClientQuota, incrementClientUsage } from "@/lib/usage-client"
 import { UpgradeModal } from "@/components/pricing/upgrade-modal"
 import { logActivity } from "@/lib/logger"
 
@@ -143,7 +143,7 @@ export function ResumeBuilder() {
         setLoading(true)
 
         // 1. Check Quota
-        const allowed = await checkQuota(user.uid, "resume")
+        const allowed = await checkClientQuota(user.uid, "resumes").then(r => r.allowed)
         if (!allowed) {
             setLoading(false)
             setShowUpgrade(true)
@@ -160,7 +160,7 @@ export function ResumeBuilder() {
             })
 
             // 2. Increment Quota
-            await incrementQuota(user.uid, "resume")
+            await incrementClientUsage(user.uid, "resumes")
 
             // 3. Log Activity
             await logActivity(user.uid, "resume_created", `Saved resume: "${resumeData.title}"`)

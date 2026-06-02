@@ -12,7 +12,7 @@ import { auth, db } from "@/lib/firebase" // Firebase imports
 import { onAuthStateChanged } from "firebase/auth"
 import { addDoc, collection, onSnapshot, query, where, Timestamp, doc, getDoc } from "firebase/firestore"
 import { extractTextFromPDF } from "@/actions/pdf-loader"
-import { checkQuota, incrementQuota } from "@/lib/subscription"
+import { checkClientQuota, incrementClientUsage } from "@/lib/usage-client"
 import { generateFlashcardsFromText } from "@/actions/ai-flashcards"
 import { Upload, BrainCircuit } from "lucide-react"
 import { UpgradeModal } from "@/components/pricing/upgrade-modal"
@@ -101,7 +101,7 @@ export function FlashcardsApp() {
         setLoading(true)
 
         // Check Limit
-        const allowed = await checkQuota(user.uid, "flashcard")
+        const allowed = await checkClientQuota(user.uid, "flashcards").then(r => r.allowed)
         if (!allowed) {
             setLoading(false)
             setShowUpgrade(true)
@@ -132,7 +132,7 @@ export function FlashcardsApp() {
             })
             await logActivity(user.uid, "deck_created", `Created AI deck: ${aiTitle}`, { count: flashcards.length, type: "AI" })
 
-            await incrementQuota(user.uid, "flashcard")
+            await incrementClientUsage(user.uid, "flashcards")
 
             toast.success("Deck generated successfully!")
             setAiOpen(false)
@@ -171,7 +171,7 @@ export function FlashcardsApp() {
         setLoading(true)
 
         // Check Limit
-        const allowed = await checkQuota(user.uid, "flashcard")
+        const allowed = await checkClientQuota(user.uid, "flashcards").then(r => r.allowed)
         if (!allowed) {
             setLoading(false)
             setShowUpgrade(true)
@@ -216,8 +216,8 @@ export function FlashcardsApp() {
                     onClose={() => setShowUpgrade(false)} 
                 />
             )}
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold tracking-tight">Flashcards & Revision</h1>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Flashcards & Revision</h1>
                 {!studyMode && (
                     <div className="flex gap-2">
                         <Dialog open={aiOpen} onOpenChange={setAiOpen}>

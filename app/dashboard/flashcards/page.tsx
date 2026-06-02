@@ -100,7 +100,12 @@ export default function FlashcardsPage() {
                 formData.append("file", file)
                 formData.append("difficulty", difficulty)
 
-                const response = await fetch("/api/generate", { method: "POST", body: formData })
+                const token = await user?.getIdToken()
+                const response = await fetch("/api/generate", {
+                    method: "POST",
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    body: formData,
+                })
                 const data = await response.json()
                 if (!response.ok) throw new Error(data.error || "AI generation failed")
                 if (!data.flashcards || data.flashcards.length === 0) throw new Error("No cards returned from AI")
@@ -162,7 +167,7 @@ export default function FlashcardsPage() {
     // Create Deck View
     if (isCreating) {
         return (
-            <div className="container max-w-4xl py-12">
+            <div className="container max-w-4xl py-6 md:py-12 px-4">
                 {showUpgradeModal && (
                     <UpgradeModal
                         feature="AI Flashcard Generation"
@@ -174,7 +179,7 @@ export default function FlashcardsPage() {
                 <Button variant="ghost" onClick={() => setIsCreating(false)} className="mb-6 pl-0">
                     ← Back to Decks
                 </Button>
-                <h1 className="text-3xl font-bold mb-2">Create New Flashcard Deck</h1>
+                <h1 className="text-2xl md:text-3xl font-bold mb-2">Create New Flashcard Deck</h1>
                 <p className="text-muted-foreground mb-8">
                     {canUseAI
                         ? "Upload a PDF to auto-generate 15+ cards with AI."
@@ -188,9 +193,9 @@ export default function FlashcardsPage() {
                     <div className="grid grid-cols-3 gap-3">
                         {(["easy", "medium", "hard"] as const).map((lvl) => {
                             const meta = {
-                                easy:   { label: "Easy",   emoji: "🟢", desc: "Definitions & basic recall" },
-                                medium: { label: "Medium", emoji: "🟡", desc: "Understanding & explanation" },
-                                hard:   { label: "Hard",   emoji: "🔴", desc: "Analysis & critical thinking" },
+                                easy:   { label: "Easy",   desc: "Definitions & basic recall" },
+                                medium: { label: "Medium", desc: "Understanding & explanation" },
+                                hard:   { label: "Hard",   desc: "Analysis & critical thinking" },
                             }[lvl]
                             return (
                                 <button
@@ -202,7 +207,6 @@ export default function FlashcardsPage() {
                                             : "border-border hover:border-muted-foreground/40"
                                     }`}
                                 >
-                                    <span className="text-2xl">{meta.emoji}</span>
                                     <span className="font-semibold text-sm">{meta.label}</span>
                                     <span className="text-xs text-muted-foreground text-center leading-tight">{meta.desc}</span>
                                 </button>
@@ -296,7 +300,7 @@ export default function FlashcardsPage() {
     }
 
     return (
-        <div className="container py-12 max-w-6xl">
+        <div className="container py-6 md:py-12 max-w-6xl">
             {showUpgradeModal && (
                 <UpgradeModal
                     feature="More Flashcard Decks"
@@ -306,9 +310,9 @@ export default function FlashcardsPage() {
                 />
             )}
 
-            <div className="flex justify-between items-center mb-10">
+            <div className="flex flex-wrap justify-between items-start gap-4 mb-8 md:mb-10">
                 <div>
-                    <h1 className="text-3xl font-bold">My Flashcards</h1>
+                    <h1 className="text-2xl md:text-3xl font-bold">My Flashcards</h1>
                     <p className="text-muted-foreground mt-1">
                         {decks.length} / {limits.flashcards >= 9999 ? "∞" : limits.flashcards} decks used
                     </p>
