@@ -25,8 +25,8 @@ import { cn } from "@/lib/utils"
 const schema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters"),
     email: z.string().email("Enter a valid email address"),
-    category: z.enum(["suggestion", "complaint", "general"], {
-        required_error: "Please select a category",
+    category: z.enum(["suggestion", "complaint", "general"] as const, {
+        error: "Please select a category",
     }),
     subject: z.string().min(5, "Subject must be at least 5 characters").max(100, "Subject is too long"),
     message: z.string().min(20, "Message must be at least 20 characters").max(2000, "Message is too long"),

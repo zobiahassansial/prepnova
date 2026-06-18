@@ -40,3 +40,8 @@ export async function verifyIdToken(token: string) {
     initAdmin()
     return admin.auth().verifyIdToken(token);
 }
+
+export function adminAuth() {
+    initAdmin()
+    return admin.auth()
+}

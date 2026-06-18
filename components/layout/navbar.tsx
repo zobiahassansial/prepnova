@@ -34,8 +34,8 @@ export function Navbar() {
                     {[
                         { label: "Home", href: "/" },
                         { label: "Tools", href: "#features" },
-                        { label: "Learning Hub", href: "#" },
-                        { label: "Contact Us", href: "/contact" },
+                        { label: "Pricing", href: "#pricing" },
+                        { label: "Contact", href: "/contact" },
                     ].map((item) => (
                         <Link
                             key={item.label}
@@ -81,8 +81,8 @@ export function Navbar() {
                             <div className="flex flex-col gap-6 mt-8">
                                 <Link href="/" className="font-medium text-lg border-b pb-2">Home</Link>
                                 <Link href="#features" className="font-medium text-lg border-b pb-2">Tools</Link>
-                                <Link href="#" className="font-medium text-lg border-b pb-2">Learning Hub</Link>
-                                <Link href="/contact" className="font-medium text-lg border-b pb-2">Contact Us</Link>
+                                <Link href="#pricing" className="font-medium text-lg border-b pb-2">Pricing</Link>
+                                <Link href="/contact" className="font-medium text-lg border-b pb-2">Contact</Link>
                                 
                                 <div className="flex items-center justify-between border-b pb-4 pt-2">
                                     <span className="font-medium text-lg text-muted-foreground">App Theme</span>

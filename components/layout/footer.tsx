@@ -44,17 +44,8 @@ export function Footer() {
 
                         {/* Resources Column */}
                         <div className="space-y-4">
-                            <h4 className="text-sm font-semibold tracking-wider uppercase text-foreground">Resources</h4>
+                            <h4 className="text-sm font-semibold tracking-wider uppercase text-foreground">Support</h4>
                             <ul className="space-y-3 text-sm text-muted-foreground">
-                                <li>
-                                    <Link href="#" className="hover:text-primary transition-colors">Learning Hub</Link>
-                                </li>
-                                <li>
-                                    <Link href="#" className="hover:text-primary transition-colors">Blog</Link>
-                                </li>
-                                <li>
-                                    <Link href="#" className="hover:text-primary transition-colors">Help Center</Link>
-                                </li>
                                 <li>
                                     <Link href="/contact" className="hover:text-primary transition-colors">Contact Us</Link>
                                 </li>

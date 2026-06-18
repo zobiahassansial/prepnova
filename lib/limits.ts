@@ -41,9 +41,26 @@ export async function checkLimit(
     feature: FeatureKey,
     amount = 1
 ): Promise<{ allowed: boolean; used: number; limit: number; error?: string }> {
-    const plan = await getUserPlan(userId)
+    const [plan, usage, adminSnap] = await Promise.all([
+        getUserPlan(userId),
+        getUsage(userId),
+        adminDb.collection("users").doc(userId).collection("admin").doc("flags").get(),
+    ])
+
+    const flags = adminSnap.data() ?? {}
+    if (flags.blocked) {
+        return { allowed: false, used: 0, limit: 0, error: "Your account has been suspended. Contact support." }
+    }
+    if (Array.isArray(flags.blockedFeatures) && (flags.blockedFeatures as string[]).includes(feature)) {
+        return { allowed: false, used: 0, limit: 0, error: "This feature is not available on your account. Contact support." }
+    }
+
     const limits = PLAN_LIMITS[plan]
-    const limit = limits[feature] as number
+    const overrides = flags.limitOverrides as Record<string, number> | undefined
+    const overrideVal = overrides?.[feature]
+    const limit = (typeof overrideVal === "number" && overrideVal >= 0)
+        ? overrideVal
+        : (limits[feature] as number)
 
     if (limit === 0) {
         return {
@@ -54,7 +71,6 @@ export async function checkLimit(
         }
     }
 
-    const usage = await getUsage(userId)
     const used = usage[feature]
 
     if (used + amount > limit) {

@@ -274,7 +274,6 @@ export default function NoteSummarizerPage() {
                                         : "border-border hover:border-muted-foreground/40 hover:bg-muted/30"
                                 }`}
                             >
-                                <span className="text-2xl">{opt.emoji}</span>
                                 <span className="text-xs font-semibold leading-tight">{opt.label}</span>
                                 <span className="text-[10px] text-muted-foreground leading-tight">{opt.desc}</span>
                             </button>
@@ -309,7 +308,7 @@ export default function NoteSummarizerPage() {
                     >
                         {loading
                             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analysing...</>
-                            : <>{selected.emoji} Generate {selected.label}</>}
+                            : <>Generate {selected.label}</>}
                     </Button>
                 )}
             </div>

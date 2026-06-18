@@ -74,7 +74,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
         } finally {
             setGenerating(false)
         }
-    }, [data, validation, onChange])
+    }, [data, onChange])
 
     const addEducation = useCallback(() => {
         const newItem = {

@@ -4,13 +4,14 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/components/providers/auth-provider";
-import { NextAuthProvider } from "@/components/providers/next-auth-provider";
+import { NextAuthProvider } from "@/components/providers/next-auth-provider"
+import { AnalyticsTracker } from "@/components/analytics/tracker";
 
 const outfit = Outfit({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PrepNova - Master Your Career",
-  description: "The all-in-one platform for students. Calendar, Resume, Interview Prep, and more.",
+  title: "PrepNova — AI Study & Career Workspace",
+  description: "Summarize lecture notes, build ATS-friendly resumes, practise mock interviews, and plan your study schedule — all in one place.",
 };
 
 export default function RootLayout({
@@ -29,6 +30,7 @@ export default function RootLayout({
         >
           <NextAuthProvider>
             <AuthProvider>
+              <AnalyticsTracker />
               {children}
               <Toaster />
             </AuthProvider>
