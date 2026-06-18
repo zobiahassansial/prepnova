@@ -33,11 +33,6 @@ function LoginContent() {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const [showReset, setShowReset] = useState(false)
     const [resetEmail, setResetEmail] = useState("")
-    // 2FA state
-    const [show2FA, setShow2FA] = useState(false)
-    const [totpCode, setTotpCode] = useState("")
-    const [pendingIdToken, setPendingIdToken] = useState("")
-    const [pendingCallbackUrl, setPendingCallbackUrl] = useState("")
 
     useEffect(() => {
         if (status === 'authenticated') {
@@ -70,15 +65,10 @@ function LoginContent() {
     const handleGoogleUser = async (user: any) => {
         try {
             const idToken = await user.getIdToken()
-            console.log("[Login] Google ID Token obtained, syncing session...", { idTokenLength: idToken.length });
-            
+
             const signInResult = await import("next-auth/react").then(mod =>
-                mod.signIn("credentials", {
-                    idToken,
-                    redirect: false,
-                })
+                mod.signIn("credentials", { idToken, redirect: false })
             )
-            console.log("[Login] Google signIn result:", signInResult);
 
             if (signInResult?.error) {
                 toast.error("Failed to create session.")
@@ -138,19 +128,6 @@ function LoginContent() {
 
             const idToken = await userCredential.user.getIdToken()
 
-            // Check if 2FA is enabled before creating the session
-            const statusRes = await fetch("/api/2fa/status", { headers: { Authorization: `Bearer ${idToken}` } })
-            const { enabled } = await statusRes.json()
-
-            if (enabled) {
-                // Hold token, show TOTP screen
-                setPendingIdToken(idToken)
-                setPendingCallbackUrl(callbackUrl)
-                setShow2FA(true)
-                setLoading(false)
-                return
-            }
-
             await createSession(idToken, callbackUrl)
         } catch (error: any) {
             if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
@@ -171,25 +148,6 @@ function LoginContent() {
         if (result?.error) { toast.error("Session creation failed."); return }
         toast.success("Logged in successfully!")
         router.push(destination)
-    }
-
-    async function handleTotpSubmit() {
-        if (!totpCode.trim() || totpCode.length !== 6) return
-        setLoading(true)
-        try {
-            const res = await fetch("/api/2fa/verify", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${pendingIdToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ code: totpCode.trim() }),
-            })
-            const data = await res.json()
-            if (!res.ok) { toast.error(data.error || "Invalid code"); setLoading(false); return }
-            await createSession(pendingIdToken, pendingCallbackUrl)
-        } catch {
-            toast.error("Verification failed. Please try again.")
-        } finally {
-            setLoading(false)
-        }
     }
 
     const handleForgotPassword = async () => {
@@ -244,45 +202,6 @@ function LoginContent() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-muted/50">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        )
-    }
-
-    // 2FA verification screen
-    if (show2FA) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-muted/50">
-                <Card className="w-full max-w-md">
-                    <CardHeader className="text-center">
-                        <div className="flex justify-center mb-4">
-                            <div className="p-3 bg-primary/10 rounded-full">
-                                <Brain className="h-8 w-8 text-primary" />
-                            </div>
-                        </div>
-                        <CardTitle className="text-2xl">Two-Factor Authentication</CardTitle>
-                        <CardDescription>Enter the 6-digit code from your authenticator app to continue.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={6}
-                            value={totpCode}
-                            onChange={e => setTotpCode(e.target.value.replace(/\D/g, ""))}
-                            placeholder="000000"
-                            className="flex h-14 w-full rounded-md border border-input bg-background px-3 py-2 text-2xl font-mono tracking-widest text-center ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            onKeyDown={e => { if (e.key === "Enter") handleTotpSubmit() }}
-                            autoFocus
-                        />
-                        <Button className="w-full" onClick={handleTotpSubmit} disabled={loading || totpCode.length !== 6}>
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Verify
-                        </Button>
-                        <Button variant="ghost" className="w-full" onClick={() => { setShow2FA(false); setTotpCode(""); setPendingIdToken("") }}>
-                            Back to Login
-                        </Button>
-                    </CardContent>
-                </Card>
             </div>
         )
     }

@@ -99,11 +99,13 @@ export function FlashcardsApp() {
     const handleGenerateAI = useCallback(async () => {
         if (!user || !aiFile || !aiTitle) return
         setLoading(true)
+        setAiLoading(true)
 
         // Check Limit
         const allowed = await checkClientQuota(user.uid, "flashcards").then(r => r.allowed)
         if (!allowed) {
             setLoading(false)
+            setAiLoading(false)
             setShowUpgrade(true)
             return
         }
@@ -178,23 +180,17 @@ export function FlashcardsApp() {
             return
         }
 
-        // Mock cards for now to demonstrate creation
-        const mockCards = [
-            { front: "What is " + newDeckTitle + "?", back: "It is a topic you are studying." },
-            { front: "Why is it important?", back: "To master your exams." }
-        ]
-
         try {
             await addDoc(collection(db, "decks"), {
                 userId: user.uid,
                 title: newDeckTitle,
-                cards: mockCards,
+                cards: [],
                 mastery: 0,
-                count: mockCards.length,
+                count: 0,
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             })
-            await logActivity(user.uid, "deck_created", `Created deck: ${newDeckTitle}`, { count: mockCards.length })
+            await logActivity(user.uid, "deck_created", `Created deck: ${newDeckTitle}`, { count: 0 })
 
             toast.success("Deck created!")
             setNewDeckOpen(false)
@@ -237,8 +233,8 @@ export function FlashcardsApp() {
                                         <Label>Upload PDF Notes</Label>
                                         <Input type="file" accept=".pdf" onChange={e => setAiFile(e.target.files?.[0] || null)} />
                                     </div>
-                                    <Button onClick={handleGenerateAI} disabled={aiLoading || !aiFile || !aiTitle}>
-                                        {aiLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Generate Deck
+                                    <Button onClick={handleGenerateAI} disabled={aiLoading || loading || !aiFile || !aiTitle}>
+                                        {aiLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating...</> : "Generate Deck"}
                                     </Button>
                                 </div>
                             </DialogContent>
@@ -279,6 +275,16 @@ export function FlashcardsApp() {
                     <p className="text-muted-foreground text-sm">Loading your decks...</p>
                 </div>
             ) : studyMode && activeDeck ? (
+                activeDeck.cards.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+                        <Brain className="h-12 w-12 text-muted-foreground/30" />
+                        <p className="font-medium">This deck has no cards yet.</p>
+                        <p className="text-sm text-muted-foreground">Use AI Generate to add cards from your study notes.</p>
+                        <Button variant="outline" onClick={() => setStudyMode(false)}>
+                            <ChevronLeft className="mr-2 h-4 w-4" /> Back to Decks
+                        </Button>
+                    </div>
+                ) : (
                 <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto w-full">
                     <div className="mb-4 flex items-center justify-between w-full">
                         <Button variant="ghost" onClick={() => setStudyMode(false)}>
@@ -324,6 +330,7 @@ export function FlashcardsApp() {
                         </Button>
                     </div>
                 </div>
+                )
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {decks.map((deck) => (

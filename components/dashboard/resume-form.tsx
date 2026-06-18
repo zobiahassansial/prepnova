@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2, Sparkles, Loader2 } from "lucide-react"
-import { useState, useRef, useCallback, useMemo } from "react"
+import { useState, useRef, useCallback } from "react"
 import { toast } from "sonner"
 
 interface ResumeFormProps {
@@ -44,7 +44,6 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
 
 
     const [generating, setGenerating] = useState(false)
-    const [showErrors, setShowErrors] = useState(false)
 
     // Refs for auto-scrolling
     const fullNameRef = useRef<HTMLInputElement>(null)
@@ -54,33 +53,13 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
     const skillsRef = useRef<HTMLButtonElement>(null)
     const jobDescriptionRef = useRef<HTMLTextAreaElement>(null)
 
-    // STRICT Validation Logic (REMOVED)
-    const validation = useMemo(() => {
-        const isJobDescriptionValid = jobDescription.trim().length >= 20
-
-        return {
-            isJobDescriptionValid,
-        }
-    }, [data, jobDescription])
-
     const handleAIGenerate = useCallback(async (e: React.MouseEvent) => {
-        // Prevent default if it's a form submission
         e.preventDefault()
-
-        const { isJobDescriptionValid } = validation
-
-        if (!isJobDescriptionValid) {
-            setShowErrors(true)
-            toast.error("Please enter a Target Job Description (min 20 chars) to use AI matching")
-
-            jobDescriptionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
-            return
-        }
 
         setGenerating(true)
         try {
             const { generateResumeContent } = await import("@/actions/generate-resume")
-            const newContent = await generateResumeContent(data, data.resumeTone)
+            const newContent = await generateResumeContent(data, data.resumeTone, jobDescription.trim() || undefined)
 
             onChange({
                 ...data,
@@ -115,8 +94,8 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
             <div className="bg-primary/5 p-4 rounded-lg flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI Assistant</h3>
-                        <p className="text-xs text-muted-foreground">Enhance your resume content automatically.</p>
+                        <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI Resume Generator</h3>
+                        <p className="text-xs text-muted-foreground">Enter any amount of info and AI will generate a full professional resume for you.</p>
                     </div>
                 </div>
 
@@ -138,7 +117,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                     </div>
                     <Button onClick={handleAIGenerate} disabled={generating} size="sm" className="ml-auto">
                         {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                        Optimize with AI
+                        {generating ? "Generating Full Resume..." : "Generate Full Resume with AI"}
                     </Button>
                 </div>
             </div>
@@ -199,9 +178,8 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                                 size="sm"
                                 className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
                                 onClick={async () => {
-                                    if (jobDescription.trim().length < 20) {
-                                        setShowErrors(true)
-                                        toast.error("Please enter a valid Job Description first (min 20 chars)")
+                                    if (jobDescription.trim().length < 10) {
+                                        toast.error("Please enter a job description first to use Match Job")
                                         jobDescriptionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
                                         return
                                     }
@@ -255,20 +233,17 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
             {/* Job Description Input (for AI) */}
             <div className="space-y-2 border rounded-lg p-4 bg-muted/20">
                 <Label className="font-semibold flex items-center gap-2">
-                    Target Job Description 
-                    <span className="text-xs font-normal text-muted-foreground">(Required for AI matching)</span>
+                    Target Job Description
+                    <span className="text-xs font-normal text-muted-foreground">(Optional — for tailored AI matching)</span>
                 </Label>
                 <Textarea
                     ref={jobDescriptionRef}
-                    className={showErrors && jobDescription.trim().length < 20 ? "border-red-500 shake" : ""}
-                    placeholder="Paste job description here..."
+                    placeholder="Paste a job description here to tailor your resume to this specific role..."
                     value={jobDescription}
                     onChange={(e) => setJobDescription(e.target.value)}
                     rows={4}
                 />
-                {showErrors && jobDescription.trim().length < 20 && (
-                    <p className="text-xs text-red-500 font-medium">Job description is required for AI matching (Min 20 chars)</p>
-                )}
+                <p className="text-xs text-muted-foreground">AI will generate a full professional resume even without this. Adding a job description makes it more targeted.</p>
             </div>
 
             <Accordion type="single" collapsible defaultValue="personal">

@@ -84,119 +84,245 @@ export async function processAndSummarizeNote(
         // ── 5. Build prompt from options ─────────────────────────────────────
         const { outputType = "Bullet points", specialInstructions = "" } = options || {}
 
-        // Output-type-specific instructions + expected JSON shape
         const outputConfigs: Record<string, { instruction: string; shape: object }> = {
             "Bullet points": {
-                instruction: "Summarize the document as clear, concise bullet points covering all the main ideas.",
+                instruction: `Analyze the ENTIRE document thoroughly and produce a rich, comprehensive set of bullet points.
+Requirements:
+- Generate 10-15 bullet points covering ALL major topics, concepts, arguments, and key facts — spread across the full document, not just the beginning
+- Each bullet point must be substantive and specific (1-2 full sentences), not vague or generic
+- Group related ideas logically — avoid repetition
+- The summary must be 3-4 sentences capturing the document's main argument, purpose, and conclusion
+- Action items must be specific and actionable based on the document content`,
                 shape: {
-                    title: "[Document topic] — Summary",
-                    summary: "2–3 sentence overview of the entire document.",
-                    keyPoints: ["Key point 1", "Key point 2", "Key point 3", "Key point 4", "Key point 5"],
-                    actionItems: ["Action item 1", "Action item 2"]
+                    title: "[Specific topic from document] — Key Points",
+                    summary: "3-4 sentence overview of the document's main purpose, core argument, and key conclusion.",
+                    keyPoints: [
+                        "Full, specific key point 1 with detail and context",
+                        "Full, specific key point 2 with detail and context",
+                        "Full, specific key point 3",
+                        "Full, specific key point 4",
+                        "Full, specific key point 5",
+                        "Full, specific key point 6",
+                        "Full, specific key point 7",
+                        "Full, specific key point 8",
+                        "Full, specific key point 9",
+                        "Full, specific key point 10"
+                    ],
+                    actionItems: [
+                        "Specific action item 1 based on the document",
+                        "Specific action item 2",
+                        "Specific action item 3",
+                        "Specific action item 4"
+                    ]
                 }
             },
             "Detailed notes": {
-                instruction: "Create comprehensive, detailed notes that cover every important concept, section, and detail from the document.",
+                instruction: `Create thorough, in-depth academic notes that comprehensively cover the ENTIRE document.
+Requirements:
+- Go section by section through the full document
+- Generate 15-20 detailed key points — each must be 2-3 sentences explaining the concept fully, not just naming it
+- Include definitions, explanations, examples, and relationships between ideas
+- Notes should be comprehensive enough that a student could use them instead of reading the original document
+- The summary must be a complete academic overview (4-5 sentences) covering purpose, methodology, findings, and conclusion
+- Action items must include specific study strategies tied to this document's content`,
                 shape: {
                     title: "[Topic] — Detailed Notes",
-                    summary: "Complete overview of all topics covered.",
+                    summary: "4-5 sentence comprehensive academic overview covering purpose, key arguments, methodology or structure, main findings, and conclusion.",
                     keyPoints: [
-                        "Section 1: [detailed explanation]",
-                        "Subsection: [explanation]",
-                        "Key fact: [detail]",
-                        "Section 2: [detailed explanation]",
-                        "Key fact: [detail]"
+                        "Section/Concept 1: [full explanation with definition and context — 2-3 sentences]",
+                        "Section/Concept 2: [full explanation]",
+                        "Key term/Definition: [term] — [full explanation]",
+                        "Section/Concept 3: [full explanation]",
+                        "Important fact/argument: [full explanation with supporting detail]",
+                        "Section/Concept 4: [full explanation]",
+                        "Key relationship: [how X relates to Y — full explanation]",
+                        "Section/Concept 5: [full explanation]",
+                        "Critical point: [full explanation]",
+                        "Section/Concept 6: [full explanation]",
+                        "Example/Case study: [full explanation]",
+                        "Section/Concept 7: [full explanation]",
+                        "Conclusion/Summary of findings: [full explanation]"
                     ],
-                    actionItems: ["Review section headings", "Create a mind map", "Identify gaps in understanding"]
+                    actionItems: [
+                        "Specific study action 1 based on this document",
+                        "Specific study action 2",
+                        "Specific study action 3",
+                        "Specific study action 4",
+                        "Specific study action 5"
+                    ]
                 }
             },
             "Short notes": {
-                instruction: "Create a concise bullet-point quick reference. Maximum 8 key points, each under 15 words.",
+                instruction: `Create a high-quality ultra-compact quick reference covering the most critical points from the document.
+Requirements:
+- Exactly 8-10 bullet points — choose only the most essential, high-value information
+- Each point must be punchy and under 20 words but still meaningful (not vague)
+- Prioritize definitions, core arguments, key facts, and memorable conclusions
+- Summary must be exactly 1 concise sentence
+- Action items must be 2-3 specific revision tips`,
                 shape: {
                     title: "Quick Notes: [topic]",
-                    summary: "Ultra-brief overview in 1 sentence.",
-                    keyPoints: ["Point 1", "Point 2", "Point 3", "Point 4", "Point 5", "Point 6"],
-                    actionItems: ["Review before exam", "Expand unclear points"]
+                    summary: "One precise sentence capturing the core purpose and main finding of the document.",
+                    keyPoints: [
+                        "Essential point 1 — concise but specific",
+                        "Essential point 2 — concise but specific",
+                        "Essential point 3 — concise but specific",
+                        "Essential point 4 — concise but specific",
+                        "Essential point 5 — concise but specific",
+                        "Essential point 6 — concise but specific",
+                        "Essential point 7 — concise but specific",
+                        "Essential point 8 — concise but specific"
+                    ],
+                    actionItems: [
+                        "Targeted revision action 1",
+                        "Targeted revision action 2",
+                        "Targeted revision action 3"
+                    ]
                 }
             },
             "Exam prep": {
-                instruction: "Create a structured exam preparation guide with likely exam questions and key concepts.",
+                instruction: `Create a comprehensive exam preparation guide strictly based on the document.
+Requirements:
+- Write 12-16 key points covering: core concepts/definitions to memorize, likely exam question areas with model answers, important theories or frameworks, common traps/mistakes, and formulae or dates if applicable
+- Format like this: start points with a TYPE tag — "CONCEPT:", "LIKELY QUESTION:", "DEFINITION:", "REMEMBER:", "COMMON MISTAKE:"
+- For LIKELY QUESTION entries, include a concise model answer after a → arrow
+- Summary must tell the student exactly what to focus on for the exam (3-4 sentences)
+- Action items must be a specific exam study plan (5 items)`,
                 shape: {
-                    title: "Exam Prep: [topic]",
-                    summary: "Key topics and what to focus on for the exam.",
+                    title: "Exam Prep: [specific topic]",
+                    summary: "3-4 sentences on what this exam will likely test, which sections are most important, and what level of understanding is needed.",
                     keyPoints: [
-                        "Topic 1: [key concept]",
-                        "Topic 2: [key concept]",
-                        "Topic 3: [key concept]",
-                        "Likely exam question: [question] — Model answer: [answer]",
-                        "Likely exam question: [question] — Model answer: [answer]",
-                        "Formula/Definition to memorize: [item]"
+                        "DEFINITION: [key term] — [clear, memorizable definition]",
+                        "CONCEPT: [core concept] — [full explanation of what it is and why it matters]",
+                        "CONCEPT: [another core concept] — [full explanation]",
+                        "LIKELY QUESTION: [exam-style question]? → Model Answer: [concise, mark-worthy answer]",
+                        "LIKELY QUESTION: [another exam question]? → Model Answer: [answer]",
+                        "LIKELY QUESTION: [another exam question]? → Model Answer: [answer]",
+                        "DEFINITION: [another key term] — [definition]",
+                        "REMEMBER: [important fact, date, formula, or statistic to memorize]",
+                        "CONCEPT: [concept] — [explanation]",
+                        "LIKELY QUESTION: [exam question]? → Model Answer: [answer]",
+                        "COMMON MISTAKE: Students often confuse [X] with [Y] — the difference is [explanation]",
+                        "REMEMBER: [another key fact to memorize]"
                     ],
-                    actionItems: ["Make flashcards for key terms", "Practice past papers", "Review weak areas first"]
+                    actionItems: [
+                        "Day 1: Focus on memorizing all definitions and key terms",
+                        "Day 2: Practice answering the likely exam questions without notes",
+                        "Day 3: Review the CONCEPT sections and create your own examples",
+                        "Day 4: Do a full timed practice test covering all topics",
+                        "Day 5: Review COMMON MISTAKES and weak areas only"
+                    ]
                 }
             },
             "Quiz": {
-                instruction: `Generate exactly 10 multiple-choice quiz questions (MCQs) strictly based on the document content.
-Each question must have EXACTLY 4 options labelled A, B, C, D.
-Only ONE option is correct.
-Include a one-sentence explanation for the correct answer.
-Questions must cover a broad range of topics from the document, not just the introduction.`,
+                instruction: `Generate exactly 10 high-quality multiple-choice quiz questions strictly based on the document content.
+Requirements:
+- Each question must have EXACTLY 4 options labelled A, B, C, D
+- Only ONE option is correct — the others must be plausible but clearly wrong distractors
+- Include a detailed 1-2 sentence explanation for the correct answer
+- Questions must span the ENTIRE document — cover different sections and difficulty levels (mix easy recall, understanding, and application questions)
+- Do NOT ask about document formatting, page numbers, or trivial details
+- The summary must describe what topics the quiz covers`,
                 shape: {
                     title: "Quiz: [topic from document]",
-                    summary: "10 multiple-choice questions covering the key concepts from this document.",
+                    summary: "10 questions testing recall, understanding, and application of the key concepts from this document.",
                     keyPoints: [],
-                    actionItems: ["Review incorrect answers", "Retake the quiz to test retention"],
+                    actionItems: ["Review explanations for any questions you got wrong", "Retake the quiz after 24 hours to test retention", "Focus revision on topics where you struggled"],
                     questions: [
                         {
-                            q: "Question text here?",
+                            q: "Question 1 text here?",
                             options: ["A. First option", "B. Second option", "C. Third option", "D. Fourth option"],
                             answer: "A",
-                            explanation: "One sentence explaining why A is correct."
+                            explanation: "Detailed explanation of why A is correct and why the others are wrong."
                         },
                         {
-                            q: "Another question?",
+                            q: "Question 2 text here?",
                             options: ["A. Option", "B. Option", "C. Option", "D. Option"],
                             answer: "C",
-                            explanation: "One sentence explaining why C is correct."
+                            explanation: "Detailed explanation of why C is correct."
                         }
                     ]
                 }
             },
             "Assignment guide": {
-                instruction: "Create a structured assignment-writing guide from the content.",
+                instruction: `Create a detailed, practical assignment-writing guide based on this document's content.
+Requirements:
+- Generate 12-15 key points covering: thesis statement suggestion, introduction structure, 4-6 main body argument points with supporting evidence from the document, counterarguments to address, conclusion strategy, and citation/referencing tips
+- Format points with TYPE tags: "THESIS:", "INTRO:", "ARGUMENT:", "EVIDENCE:", "COUNTERARGUMENT:", "CONCLUSION:", "CITATION:", "AVOID:"
+- Summary must be a strategic overview of how to write a strong assignment on this topic (3-4 sentences)
+- Action items must be a step-by-step writing plan`,
                 shape: {
-                    title: "Assignment Guide: [topic]",
-                    summary: "How to approach and complete this assignment successfully.",
+                    title: "Assignment Guide: [specific topic]",
+                    summary: "3-4 sentences on the assignment's key requirements, the strongest approach to take, and what markers will be looking for.",
                     keyPoints: [
-                        "Key concept to address: [concept]",
-                        "Suggested intro: [what to include]",
-                        "Main body points: [points]",
-                        "Suggested conclusion: [what to include]",
-                        "Common mistake to avoid: [mistake]"
+                        "THESIS: Suggested thesis statement — [specific, arguable claim based on the document]",
+                        "INTRO: Opening hook — [specific suggestion for engaging the reader]",
+                        "INTRO: Background context to establish — [what background to cover and why]",
+                        "ARGUMENT: Main body point 1 — [specific argument with supporting evidence from the document]",
+                        "EVIDENCE: Key evidence/quote to support point 1 — [specific evidence from document]",
+                        "ARGUMENT: Main body point 2 — [specific argument]",
+                        "EVIDENCE: Supporting evidence for point 2 — [specific evidence]",
+                        "ARGUMENT: Main body point 3 — [specific argument]",
+                        "COUNTERARGUMENT: Address the opposing view that [X] — refute it by explaining [Y]",
+                        "CONCLUSION: Restate thesis in light of evidence — [how to close strongly]",
+                        "CITATION: Key sources or concepts from this document to cite — [specific items]",
+                        "AVOID: Common mistake — [specific error students make on this topic and how to avoid it]"
                     ],
-                    actionItems: ["Outline your assignment before writing", "Cite all sources", "Proofread for clarity"]
+                    actionItems: [
+                        "Step 1: Write your thesis statement and get it approved/refined before drafting",
+                        "Step 2: Create a detailed outline using the ARGUMENT points above",
+                        "Step 3: Draft the introduction — hook, context, and thesis",
+                        "Step 4: Write each body paragraph using point-evidence-explanation structure",
+                        "Step 5: Write the conclusion, then proofread for argument coherence and citations"
+                    ]
                 }
             },
             "Paragraph": {
-                instruction: "Write a flowing, well-structured paragraph summary that captures the full meaning of the document.",
+                instruction: `Write a rich, flowing, well-structured multi-paragraph summary of the document.
+Requirements:
+- Write 3-4 coherent paragraphs in the "summary" field: (1) introduction to the topic and document's purpose, (2) main arguments or content covered, (3) key findings or conclusions, (4) significance or implications (if applicable)
+- Each paragraph must be 4-6 sentences — detailed and substantive, not a thin overview
+- Key points should capture the 3-4 most important arguments or ideas from the document as complete sentences
+- This should read like a high-quality academic abstract or executive summary
+- Action items must be specific analytical follow-up tasks`,
                 shape: {
-                    title: "[Topic] — Summary",
-                    summary: "[Write a full flowing paragraph summary here]",
-                    keyPoints: ["Main argument: [point]", "Supporting evidence: [point]", "Conclusion: [point]"],
-                    actionItems: ["Identify the main thesis", "Note supporting arguments"]
+                    title: "[Topic] — Written Summary",
+                    summary: "[Paragraph 1: Introduction and purpose of the document — 4-6 sentences.]\n\n[Paragraph 2: Main arguments, content, or methodology covered — 4-6 sentences.]\n\n[Paragraph 3: Key findings, conclusions, or outcomes — 4-6 sentences.]",
+                    keyPoints: [
+                        "Core argument or thesis: [full sentence stating the main claim]",
+                        "Key finding or conclusion: [full sentence with specific detail]",
+                        "Important implication or significance: [full sentence]",
+                        "Notable limitation or counterpoint: [full sentence]"
+                    ],
+                    actionItems: [
+                        "Identify the document's primary thesis and evaluate whether the evidence supports it",
+                        "Compare the key arguments against other sources on this topic",
+                        "Note any gaps in the argument or areas needing further research"
+                    ]
                 }
             }
         }
 
         const config = outputConfigs[outputType] || outputConfigs["Bullet points"]
 
-        const prompt = `You are an expert academic assistant. ${config.instruction}
-${specialInstructions?.trim() ? `\nADDITIONAL INSTRUCTIONS FROM USER: ${specialInstructions.trim()}\n` : ""}
-You MUST return a single valid JSON object matching this exact structure. Fill every field with real content from the document — do not leave placeholders:
+        const prompt = `You are an expert academic assistant and note-taking specialist. Your task is to produce high-quality, detailed, and genuinely useful output — NOT a brief or generic summary.
+
+OUTPUT TYPE: ${outputType}
+${specialInstructions?.trim() ? `\nSPECIAL INSTRUCTIONS FROM USER (follow these precisely): ${specialInstructions.trim()}\n` : ""}
+
+TASK: ${config.instruction}
+
+CRITICAL RULES:
+- Fill EVERY field with real, specific content from the document — no placeholders, no generic filler
+- Do NOT truncate or cut short — generate the full number of key points specified
+- Base ALL content strictly on what is in the document below
+- Return a single valid JSON object matching the exact structure below
+
+REQUIRED JSON STRUCTURE:
 ${JSON.stringify(config.shape, null, 2)}
 
 DOCUMENT TEXT (${text.length.toLocaleString()} chars):
-${text.slice(0, 28000)}`
+${text.slice(0, 30000)}`
 
         // ── 6. Deduct credit then call Groq ──────────────────────────────────
         await incrementUsage(userId, "summaries")
@@ -206,9 +332,16 @@ ${text.slice(0, 28000)}`
         try {
             result = await model.chat.completions.create({
                 model: GROQ_MODEL,
-                messages: [{ role: "user", content: prompt }],
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are an expert academic assistant. Always return valid JSON only. Generate rich, detailed, complete content — never cut short. Never use placeholder text."
+                    },
+                    { role: "user", content: prompt }
+                ],
                 response_format: { type: "json_object" },
-                temperature: 0.3,
+                temperature: 0.5,
+                max_tokens: 4000,
             })
         } catch (aiError) {
             await decrementUsage(userId, "summaries")

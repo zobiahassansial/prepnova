@@ -59,7 +59,7 @@ export function SettingsForm() {
     const [profileData, setProfileData] = useState({
         displayName: "", role: "Student", email: "", photoURL: ""
     })
-    const [passwords, setPasswords] = useState({ current: "", new: "", confirm: "" })
+    const [deletePassword, setDeletePassword] = useState("")
     const [deleteConfirm, setDeleteConfirm] = useState("")
     const [uploads, setUploads] = useState<any[]>([])
     const [storageUsed, setStorageUsed] = useState(0)
@@ -222,41 +222,6 @@ export function SettingsForm() {
         }
     }, [user])
 
-    // ── Password Handlers ─────────────────────────────────────────────────────
-    const handlePassChange = useCallback(async () => {
-        if (!user || !user.email) return
-        if (passwords.new !== passwords.confirm) {
-            toast.error("New passwords do not match")
-            return
-        }
-        if (passwords.new.length < 6) {
-            toast.error("Password must be at least 6 characters")
-            return
-        }
-        if (!passwords.current) {
-            toast.error("Please enter your current password to verify identity")
-            return
-        }
-
-        setLoading(true)
-        try {
-            // Re-authenticate first
-            const credential = EmailAuthProvider.credential(user.email, passwords.current)
-            await reauthenticateWithCredential(user, credential)
-            await updatePassword(user, passwords.new)
-            toast.success("Password updated successfully!")
-            setPasswords({ current: "", new: "", confirm: "" })
-        } catch (e: any) {
-            if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
-                toast.error("Current password is incorrect")
-            } else {
-                toast.error("Failed: " + e.message)
-            }
-        } finally {
-            setLoading(false)
-        }
-    }, [user, passwords])
-
     // ── Send Reset Email ──────────────────────────────────────────────────────
     const handleSendResetEmail = useCallback(async () => {
         const currentUser = auth.currentUser
@@ -394,17 +359,17 @@ export function SettingsForm() {
             toast.error('Type "DELETE" to confirm')
             return
         }
-        if (!passwords.current) {
+        if (!deletePassword) {
             toast.error("Enter your current password to confirm deletion")
             return
         }
 
         setLoading(true)
         try {
-            const credential = EmailAuthProvider.credential(user.email, passwords.current)
+            const credential = EmailAuthProvider.credential(user.email, deletePassword)
             await reauthenticateWithCredential(user, credential)
 
-            // Delete user data
+            // Delete user data from Firestore
             const collections = ["tasks", "resumes", "flashcardDecks", "summaries", "activityLog", "studySessions"]
             for (const col of collections) {
                 const snap = await getDocs(collection(db, "users", user.uid, col))
@@ -424,7 +389,7 @@ export function SettingsForm() {
         } finally {
             setLoading(false)
         }
-    }, [user, deleteConfirm, passwords.current, router])
+    }, [user, deleteConfirm, deletePassword, router])
 
     const storagePercent = Math.min(100, (storageUsed / STORAGE_LIMIT) * 100)
     const currentPlan = subscription?.plan || plan || "free"
@@ -642,9 +607,6 @@ export function SettingsForm() {
                     </CardContent>
                 </Card>
 
-                {/* Two-Factor Auth */}
-                <TwoFactorCard />
-
                 {/* Danger Zone */}
                 <Card className="border-red-200 dark:border-red-900">
                     <CardHeader>
@@ -673,8 +635,8 @@ export function SettingsForm() {
                                 <Label className="text-red-700 dark:text-red-400">Current Password:</Label>
                                 <Input
                                     type="password"
-                                    value={passwords.current}
-                                    onChange={e => setPasswords({ ...passwords, current: e.target.value })}
+                                    value={deletePassword}
+                                    onChange={e => setDeletePassword(e.target.value)}
                                     placeholder="Verify your identity"
                                     className="border-red-300"
                                 />
@@ -682,7 +644,7 @@ export function SettingsForm() {
                             <Button
                                 variant="destructive"
                                 className="w-full"
-                                disabled={deleteConfirm !== "DELETE" || !passwords.current || loading}
+                                disabled={deleteConfirm !== "DELETE" || !deletePassword || loading}
                                 onClick={handleDeleteAccount}
                             >
                                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -978,220 +940,3 @@ export function SettingsForm() {
     )
 }
 
-// ─── Two-Factor Authentication Card ──────────────────────────────────────────
-
-type TwoFactorStep = "idle" | "setup" | "verify-enable" | "verify-disable" | "enabled"
-
-function TwoFactorCard() {
-    const { user } = useAuth()
-    const [step, setStep] = useState<TwoFactorStep>("idle")
-    const [is2FAEnabled, setIs2FAEnabled] = useState(false)
-    const [qrCodeDataUrl, setQrCodeDataUrl] = useState("")
-    const [secret, setSecret] = useState("")
-    const [code, setCode] = useState("")
-    const [loading, setLoading] = useState(false)
-    const [checking, setChecking] = useState(true)
-
-    // Fetch current 2FA status
-    useEffect(() => {
-        if (!user) {
-            setChecking(false)
-            return
-        }
-        user.getIdToken()
-            .then(token =>
-                fetch("/api/2fa/status", { headers: { Authorization: `Bearer ${token}` } })
-                    .then(r => r.json())
-                    .then(d => {
-                        setIs2FAEnabled(d.enabled)
-                        setStep(d.enabled ? "enabled" : "idle")
-                    })
-            )
-            .catch(() => { /* silently fall through to idle */ })
-            .finally(() => setChecking(false))
-    }, [user])
-
-    async function startSetup() {
-        if (!user) return
-        setLoading(true)
-        try {
-            const token = await user.getIdToken()
-            const res = await fetch("/api/2fa/setup", { method: "POST", headers: { Authorization: `Bearer ${token}` } })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error)
-            setQrCodeDataUrl(data.qrCodeDataUrl)
-            setSecret(data.secret)
-            setStep("setup")
-        } catch (e: any) {
-            toast.error(e.message || "Failed to start setup")
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    async function confirmEnable() {
-        if (!user || !code.trim()) return
-        setLoading(true)
-        try {
-            const token = await user.getIdToken()
-            const res = await fetch("/api/2fa/enable", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ code: code.trim() }),
-            })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error)
-            setIs2FAEnabled(true)
-            setStep("enabled")
-            setCode("")
-            toast.success("Two-factor authentication enabled!")
-        } catch (e: any) {
-            toast.error(e.message || "Invalid code")
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    async function confirmDisable() {
-        if (!user || !code.trim()) return
-        setLoading(true)
-        try {
-            const token = await user.getIdToken()
-            const res = await fetch("/api/2fa/disable", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ code: code.trim() }),
-            })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error)
-            setIs2FAEnabled(false)
-            setStep("idle")
-            setCode("")
-            toast.success("Two-factor authentication disabled.")
-        } catch (e: any) {
-            toast.error(e.message || "Invalid code")
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    if (checking) {
-        return (
-            <Card>
-                <CardContent className="flex items-center justify-center py-10">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </CardContent>
-            </Card>
-        )
-    }
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Two-Factor Authentication</CardTitle>
-                <CardDescription>Add an extra layer of security using an authenticator app.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-
-                {/* Idle — not enabled */}
-                {step === "idle" && (
-                    <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                                <Shield className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                            <div>
-                                <p className="font-medium">Authenticator App</p>
-                                <p className="text-sm text-muted-foreground">2FA is not enabled on your account.</p>
-                            </div>
-                        </div>
-                        <Button size="sm" onClick={startSetup} disabled={loading}>
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Enable 2FA
-                        </Button>
-                    </div>
-                )}
-
-                {/* Enabled */}
-                {step === "enabled" && (
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 border rounded-lg bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-                            <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
-                                    <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                </div>
-                                <div>
-                                    <p className="font-medium text-green-800 dark:text-green-300">2FA is active</p>
-                                    <p className="text-sm text-green-700/70 dark:text-green-400/70">Your account is protected with an authenticator app.</p>
-                                </div>
-                            </div>
-                            <Button size="sm" variant="outline" className="border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20" onClick={() => { setStep("verify-disable"); setCode("") }}>
-                                Disable
-                            </Button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Setup — show QR code */}
-                {step === "setup" && (
-                    <div className="space-y-5">
-                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                            <p className="text-sm font-medium">Step 1 — Scan this QR code</p>
-                            <p className="text-xs text-muted-foreground">Open Google Authenticator, Authy, or any TOTP app and scan the code below.</p>
-                            {qrCodeDataUrl && (
-                                <div className="flex justify-center">
-                                    <img src={qrCodeDataUrl} alt="2FA QR Code" className="w-44 h-44 rounded-lg border" />
-                                </div>
-                            )}
-                            <p className="text-xs text-muted-foreground text-center">
-                                Can't scan? Enter this key manually:<br />
-                                <span className="font-mono font-semibold text-foreground tracking-widest">{secret}</span>
-                            </p>
-                        </div>
-                        <div className="space-y-2">
-                            <p className="text-sm font-medium">Step 2 — Enter the 6-digit code from your app</p>
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="000000"
-                                    maxLength={6}
-                                    value={code}
-                                    onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
-                                    className="font-mono text-center text-lg tracking-widest"
-                                />
-                                <Button onClick={confirmEnable} disabled={loading || code.length !== 6}>
-                                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Verify
-                                </Button>
-                            </div>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => { setStep("idle"); setCode("") }}>Cancel</Button>
-                    </div>
-                )}
-
-                {/* Disable — confirm with code */}
-                {step === "verify-disable" && (
-                    <div className="space-y-4">
-                        <div className="p-4 rounded-lg border bg-muted/30 space-y-1">
-                            <p className="text-sm font-medium">Confirm with your authenticator app</p>
-                            <p className="text-xs text-muted-foreground">Enter the current 6-digit code from your app to disable 2FA.</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <Input
-                                placeholder="000000"
-                                maxLength={6}
-                                value={code}
-                                onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
-                                className="font-mono text-center text-lg tracking-widest"
-                            />
-                            <Button variant="destructive" onClick={confirmDisable} disabled={loading || code.length !== 6}>
-                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Disable
-                            </Button>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => { setStep("enabled"); setCode("") }}>Cancel</Button>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    )
-}
