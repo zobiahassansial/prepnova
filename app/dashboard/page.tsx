@@ -26,7 +26,7 @@ function getProgressColor(pct: number) {
 export default function DashboardPage() {
     const router = useRouter()
     const [user, setUser] = useState<any>(null)
-    const [userName, setUserName] = useState("Student")
+    const [userName, setUserName] = useState("")
     const [userPhoto, setUserPhoto] = useState<string | undefined>(undefined)
     const [isLoadingStats, setIsLoadingStats] = useState(true)
 
@@ -92,14 +92,12 @@ export default function DashboardPage() {
             const unsubProfile = onSnapshot(doc(db, "users", uid), (snap) => {
                 if (snap.exists()) {
                     const data = snap.data()
-                    let display = "Student"
-                    if (data.name) display = capitalize(data.name)
-                    if (data.role) display += ` (${data.role})`
+                    const display = data.name ? capitalize(data.name) : (currentUser.displayName ? capitalize(currentUser.displayName) : "")
                     setUserName(display)
                     if (data.photoURL) setUserPhoto(data.photoURL)
                     if (data.streak !== undefined) setStreak(data.streak)
                 } else if (currentUser.displayName) {
-                    setUserName(capitalize(currentUser.displayName) + " (Student)")
+                    setUserName(capitalize(currentUser.displayName))
                     if (currentUser.photoURL) setUserPhoto(currentUser.photoURL)
                 }
             })

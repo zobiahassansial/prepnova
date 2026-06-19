@@ -64,15 +64,39 @@ export const TemplateGallery = memo(function TemplateGallery({ selected, onSelec
     const list = type === "cover" ? coverTemplates : templates
     const [showCustomTemplateModal, setShowCustomTemplateModal] = useState(false)
     const [customHtml, setCustomHtml] = useState(customTemplateHtml || "")
+    const [customContentType, setCustomContentType] = useState<"html" | "image" | "pdf">("html")
+    const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+    const detectType = (content: string): "html" | "image" | "pdf" => {
+        if (content.startsWith("data:image/")) return "image"
+        if (content.startsWith("data:application/pdf")) return "pdf"
+        return "html"
+    }
 
     const handleFileRead = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
         const reader = new FileReader()
-        reader.onload = (ev) => {
-            setCustomHtml(ev.target?.result as string)
+        if (file.type.startsWith("image/")) {
+            setCustomContentType("image")
+            reader.onload = (ev) => setCustomHtml(ev.target?.result as string)
+            reader.readAsDataURL(file)
+        } else if (file.type === "application/pdf") {
+            setCustomContentType("pdf")
+            reader.onload = (ev) => setCustomHtml(ev.target?.result as string)
+            reader.readAsDataURL(file)
+        } else {
+            setCustomContentType("html")
+            reader.onload = (ev) => setCustomHtml(ev.target?.result as string)
+            reader.readAsText(file)
         }
-        reader.readAsText(file)
+    }
+
+    const openCustomModal = () => {
+        const existing = customTemplateHtml || ""
+        setCustomHtml(existing)
+        setCustomContentType(detectType(existing))
+        setShowCustomTemplateModal(true)
     }
 
     const handleUseCustomTemplate = () => {
@@ -80,52 +104,94 @@ export const TemplateGallery = memo(function TemplateGallery({ selected, onSelec
         setShowCustomTemplateModal(false)
     }
 
+    const previewId = hoveredId || selected || list[0]?.id
+    const allItems = [...list, { id: "custom", name: "Custom Upload", description: "" }]
+    const previewLabel = allItems.find((t) => t.id === previewId)?.name || ""
+
+    const renderPreview = () => {
+        if (previewId === "custom") {
+            const content = customTemplateHtml || ""
+            if (!content) return (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400">
+                    <span className="text-3xl">+</span>
+                    <span className="text-xs text-center px-2">Upload PDF, image, or HTML</span>
+                </div>
+            )
+            const t = detectType(content)
+            if (t === "image") return <img src={content} className="w-full h-full object-contain p-1" alt="Custom template" />
+            if (t === "pdf") return (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-500">
+                    <span className="text-4xl">📄</span>
+                    <span className="text-xs font-medium">PDF Template</span>
+                </div>
+            )
+            return (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-500">
+                    <span className="text-3xl font-mono">&lt;/&gt;</span>
+                    <span className="text-xs font-medium">HTML Template</span>
+                </div>
+            )
+        }
+        return <TemplateSVG id={previewId || "basic"} type={type} />
+    }
+
     return (
         <div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {list.map((t) => (
-                    <button
-                        key={t.id}
-                        onClick={() => onSelect(t.id)}
-                        className={cn(
-                            "rounded-xl border transition flex flex-col items-center relative group text-left hover:shadow-md overflow-hidden bg-white",
-                            selected === t.id
-                                ? "border-blue-600 ring-2 ring-blue-600"
-                                : "border-slate-200 hover:border-slate-400"
+            <div className="flex gap-3" style={{ height: 280 }}>
+                {/* Left: scrollable template list */}
+                <div className="w-36 shrink-0 overflow-y-auto border-r pr-2">
+                    <div className="space-y-0.5 pb-1">
+                        {list.map((t) => (
+                            <button
+                                key={t.id}
+                                onClick={() => onSelect(t.id)}
+                                onMouseEnter={() => setHoveredId(t.id)}
+                                onMouseLeave={() => setHoveredId(null)}
+                                className={cn(
+                                    "w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center justify-between gap-1 transition-colors",
+                                    selected === t.id
+                                        ? "bg-blue-50 text-blue-700 font-medium"
+                                        : "text-slate-600 hover:bg-slate-50"
+                                )}
+                            >
+                                <span className="truncate">{t.name}</span>
+                                {selected === t.id && <span className="text-blue-600 shrink-0 text-[10px]">✓</span>}
+                            </button>
+                        ))}
+                        {type === "resume" && (
+                            <button
+                                onClick={openCustomModal}
+                                onMouseEnter={() => setHoveredId("custom")}
+                                onMouseLeave={() => setHoveredId(null)}
+                                className={cn(
+                                    "w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center justify-between gap-1 transition-colors border border-dashed mt-1",
+                                    selected === "custom"
+                                        ? "bg-indigo-50 text-indigo-700 font-medium border-indigo-300"
+                                        : "text-slate-500 hover:bg-slate-50 border-slate-300"
+                                )}
+                            >
+                                <span className="truncate">+ Custom</span>
+                                {selected === "custom" && <span className="text-indigo-600 shrink-0 text-[10px]">✓</span>}
+                            </button>
                         )}
-                        style={{ maxWidth: "160px" }}
-                    >
-                        {/* SVG Thumbnail */}
-                        <div className="w-full overflow-hidden bg-gray-50" style={{ height: "120px" }}>
-                            <TemplateSVG id={t.id} type={type} />
-                        </div>
-
-                        {/* Template Name Label */}
-                        <div className="w-full p-2 text-center bg-white border-t border-slate-100">
-                            <span className="text-xs font-medium text-slate-700 block truncate">{t.name}</span>
-                        </div>
-
-                        {selected === t.id && (
-                            <div className="absolute top-1 right-1">
-                                <span className="bg-blue-600 text-white text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-full shadow-sm">
-                                    ✓
-                                </span>
-                            </div>
-                        )}
-                    </button>
-                ))}
-
-                {/* "Use Your Own Template" card — only for resume type */}
-                {type === "resume" && (
-                    <div
-                        onClick={() => setShowCustomTemplateModal(true)}
-                        className="cursor-pointer border-2 border-dashed border-gray-400 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-indigo-500 transition-colors"
-                        style={{ height: "120px", maxWidth: "160px" }}
-                    >
-                        <span className="text-2xl">+</span>
-                        <span className="text-xs text-gray-500 text-center px-2">Use Your Own Template</span>
                     </div>
-                )}
+                </div>
+
+                {/* Right: preview */}
+                <div className="flex-1 flex flex-col gap-2 min-w-0">
+                    <div className="flex-1 border rounded-lg overflow-hidden bg-gray-50">
+                        {renderPreview()}
+                    </div>
+                    <p className="text-xs text-center text-slate-500 truncate">{previewLabel}</p>
+                    {selected === "custom" && customTemplateHtml && (
+                        <button
+                            onClick={openCustomModal}
+                            className="w-full py-1 text-xs text-indigo-600 hover:text-indigo-700 border border-indigo-200 rounded-md hover:bg-indigo-50 transition-colors"
+                        >
+                            Edit Custom Template
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Custom Template Modal */}
@@ -133,7 +199,9 @@ export const TemplateGallery = memo(function TemplateGallery({ selected, onSelec
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">Use Your Own Template</h2>
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">
+                                {customTemplateHtml ? "Edit Your Template" : "Upload Your Template"}
+                            </h2>
                             <button
                                 onClick={() => setShowCustomTemplateModal(false)}
                                 className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors text-xl leading-none"
@@ -142,30 +210,47 @@ export const TemplateGallery = memo(function TemplateGallery({ selected, onSelec
                             </button>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                Upload HTML File
+                                Upload File
                             </label>
+                            <p className="text-xs text-slate-500">Supports HTML, PDF, PNG, JPG and other image formats</p>
                             <input
                                 type="file"
-                                accept=".html"
+                                accept=".html,.pdf,image/*"
                                 onChange={handleFileRead}
                                 className="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
                             />
                         </div>
 
-                        <div className="space-y-3">
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                Or Paste HTML/CSS Template Here
-                            </label>
-                            <textarea
-                                value={customHtml}
-                                onChange={(e) => setCustomHtml(e.target.value)}
-                                placeholder="<!DOCTYPE html><html>...</html>"
-                                rows={8}
-                                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-xs font-mono text-slate-800 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                        </div>
+                        {customContentType === "image" && customHtml && (
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Preview</label>
+                                <img src={customHtml} className="w-full max-h-48 object-contain border rounded-lg bg-gray-50" alt="Template preview" />
+                            </div>
+                        )}
+
+                        {customContentType === "pdf" && customHtml && (
+                            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <span className="text-2xl">📄</span>
+                                <span className="text-sm text-slate-600 dark:text-slate-300">PDF template loaded. Upload a new file to replace it.</span>
+                            </div>
+                        )}
+
+                        {customContentType === "html" && (
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    {customHtml ? "Edit HTML/CSS" : "Or Paste HTML/CSS Template"}
+                                </label>
+                                <textarea
+                                    value={customHtml}
+                                    onChange={(e) => setCustomHtml(e.target.value)}
+                                    placeholder="<!DOCTYPE html><html>...</html>"
+                                    rows={8}
+                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-xs font-mono text-slate-800 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                        )}
 
                         <div className="flex gap-3 pt-2">
                             <button

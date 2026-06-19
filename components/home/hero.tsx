@@ -19,16 +19,35 @@ function HeroPreview() {
   }, [prefersReduced])
 
   return (
-    <div className="w-full max-w-lg mx-auto lg:mx-0">
-      <div className="rounded-xl border border-border bg-card shadow-xl shadow-black/5 overflow-hidden">
-        {/* Browser chrome */}
+    <div className="w-full max-w-lg mx-auto lg:mx-0 relative">
+      {/* Ambient glow behind card */}
+      <div className="absolute -inset-4 bg-primary/8 blur-3xl rounded-3xl pointer-events-none" />
+
+      {/* Floating status badge */}
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6, duration: 0.4 }}
+        className="absolute -top-3 right-6 z-10 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-background px-3 py-1 text-xs font-medium text-primary shadow-sm"
+      >
+        <motion.span
+          animate={{ opacity: [1, 0.4, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+          className="h-1.5 w-1.5 rounded-full bg-primary"
+        />
+        AI Processing
+      </motion.div>
+
+      <div className="relative rounded-xl border border-border bg-card shadow-xl shadow-black/5 overflow-hidden">
+        {/* App chrome bar — no specific URL */}
         <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border bg-muted/50">
           <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
           <span className="ml-3 flex-1 text-xs text-muted-foreground font-mono truncate">
-            prepnova.online/app/note-summarizer
+            prepnova.online
           </span>
+          <span className="text-[10px] text-muted-foreground/60 font-mono">Note Summarizer</span>
         </div>
 
         {/* Content */}
@@ -133,7 +152,7 @@ function HeroPreview() {
         </div>
       </div>
 
-      <p className="mt-3 text-xs text-center text-muted-foreground">
+      <p className="mt-4 text-xs text-center text-muted-foreground">
         Paste notes or upload a PDF — get a summary and flashcards in seconds.
       </p>
     </div>
@@ -154,10 +173,10 @@ export function Hero() {
             </div>
 
             <div className="space-y-5">
-              <h1 className="text-5xl sm:text-6xl lg:text-[4.5rem] font-bold tracking-tight text-foreground leading-[1.08]">
-                Your semester,
+              <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-bold tracking-tight text-foreground leading-[1.12]">
+                Academic Learning
                 <br />
-                <span className="text-primary">under control.</span>
+                <span className="text-primary">with AI.</span>
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-lg mx-auto lg:mx-0">
                 Turn lecture notes into summaries and flashcards, plan a week that adapts to your deadlines, build a resume, and practise interviews — all in one workspace.

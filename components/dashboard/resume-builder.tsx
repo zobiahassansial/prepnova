@@ -195,7 +195,7 @@ export function ResumeBuilder() {
     }, [])
 
     return (
-        <div className="flex flex-col h-[calc(100vh-6rem)]">
+        <div className="flex flex-col h-[calc(100vh-8rem)]">
             {showUpgrade && (
                 <UpgradeModal
                     feature="Resume Generation"
@@ -224,6 +224,7 @@ export function ResumeBuilder() {
                                     selected={resumeData.template}
                                     activeTemplate={activeResumeTemplate}
                                     onSelect={handleSelectResumeTemplate}
+                                    customTemplateHtml={resumeData.customTemplateHtml}
                                 />
                             </PopoverContent>
                         </Popover>
@@ -320,13 +321,13 @@ export function ResumeBuilder() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
 
                 {/* Editor Pane */}
-                <div className={`flex flex-col overflow-y-auto pr-2 min-h-0 ${activeTab === "preview" ? "hidden md:flex" : "flex"}`}>
+                <div className={`flex flex-col overflow-y-auto overflow-x-hidden pr-2 min-h-0 min-w-0 ${activeTab === "preview" ? "hidden md:flex" : "flex"}`}>
 
                     <ResumeForm data={resumeData} onChange={setResumeData} />
                 </div>
 
                 {/* Preview Pane */}
-                <div className={`bg-muted/30 border rounded-lg flex flex-col min-h-0 ${activeTab === "editor" ? "hidden md:flex" : "flex"}`}>
+                <div className={`bg-muted/30 border rounded-lg flex flex-col min-h-0 min-w-0 overflow-hidden ${activeTab === "editor" ? "hidden md:flex" : "flex"}`}>
                     <ResumePreview
                         data={resumeData}
                         onPageCountChange={setPageCount}

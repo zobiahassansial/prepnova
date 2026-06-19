@@ -476,20 +476,20 @@ export default function ModulePage({ params }: { params: Promise<{ module: strin
                                     <Icon className="h-4 w-4" />
                                     <span>{moduleInfo.title}</span>
                                 </div>
-                                <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-tight">
+                                <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">
                                     {moduleInfo.title.split(" ")[0]} <br/>
                                     <span className={`bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent`}>
                                         {moduleInfo.title.split(" ").slice(1).join(" ")}
                                     </span>
                                 </h1>
-                                <p className="text-xl text-muted-foreground leading-relaxed max-w-lg">
+                                <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-lg">
                                     {moduleInfo.subtitle}
                                 </p>
                                 <div className="flex flex-col sm:flex-row gap-4">
-                                    <Button size="lg" className="h-14 text-lg px-8 rounded-full shadow-lg shadow-primary/20 hover:scale-105 transition-all" onClick={handleAccess}>
-                                        Launch Tool <ArrowRight className="ml-2 h-5 w-5" />
+                                    <Button size="lg" className="h-11 text-base px-6 rounded-full shadow-lg shadow-primary/20 hover:scale-105 transition-all" onClick={handleAccess}>
+                                        Launch Tool <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
-                                    <Button variant="outline" size="lg" className="h-14 text-lg px-8 rounded-full">
+                                    <Button variant="outline" size="lg" className="h-11 text-base px-6 rounded-full">
                                         Watch Demo <Play className="ml-2 h-4 w-4" />
                                     </Button>
                                 </div>
@@ -552,7 +552,7 @@ export default function ModulePage({ params }: { params: Promise<{ module: strin
                                 <div key={i} className="flex items-center justify-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
                                     <stat.icon className="h-5 w-5 text-muted-foreground" />
                                     <div>
-                                        <p className="text-xl font-bold leading-none">{stat.value}</p>
+                                        <p className="text-lg font-bold leading-none">{stat.value}</p>
                                         <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{stat.label}</p>
                                     </div>
                                 </div>
@@ -576,7 +576,7 @@ export default function ModulePage({ params }: { params: Promise<{ module: strin
                                     {moduleInfo.problems.map((p: string, i: number) => (
                                         <div key={i} className="flex gap-4 items-start">
                                             <div className="mt-1 min-w-[24px] h-6 rounded-full bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-300 flex items-center justify-center text-xs font-bold">✕</div>
-                                            <p className="text-lg text-muted-foreground">{p}</p>
+                                            <p className="text-sm md:text-base text-muted-foreground">{p}</p>
                                         </div>
                                     ))}
                                 </CardContent>
@@ -594,7 +594,7 @@ export default function ModulePage({ params }: { params: Promise<{ module: strin
                                     {moduleInfo.solutions.map((s: string, i: number) => (
                                         <div key={i} className="flex gap-4 items-start">
                                             <div className="mt-1 min-w-[24px] h-6 rounded-full bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300 flex items-center justify-center text-xs font-bold">✓</div>
-                                            <p className="text-lg font-medium">{s}</p>
+                                            <p className="text-sm md:text-base font-medium">{s}</p>
                                         </div>
                                     ))}
                                 </CardContent>

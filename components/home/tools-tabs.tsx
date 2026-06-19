@@ -5,47 +5,86 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Brain, Calendar, FileText, Code2, BookOpen, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
-// ─── Mockup components (product UI representations) ────────────────────────
+// ─── Mockup components (animated product UI representations) ─────────────────
 
 function StudyMockup() {
+  const points = [
+    "Mitosis produces two identical daughter cells from a single parent cell.",
+    "Meiosis produces four genetically unique cells — used in sexual reproduction.",
+    "The spindle apparatus separates chromosomes and pulls them to opposite poles.",
+  ]
+  const cards = ["What is mitosis?", "Mitosis vs Meiosis", "Spindle apparatus", "4 stages of mitosis"]
+
   return (
     <div className="space-y-3 pointer-events-none select-none">
-      <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Summary
-          </span>
-          <span className="text-[10px] text-muted-foreground">· Lecture 4: Cell Division</span>
-        </div>
-        {[
-          "Mitosis produces two identical daughter cells from a single parent cell.",
-          "Meiosis produces four genetically unique cells — used in sexual reproduction.",
-          "The spindle apparatus separates chromosomes and pulls them to opposite poles.",
-        ].map((pt, i) => (
-          <div key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-snug">
+      {/* AI status row */}
+      <motion.div
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-center justify-between"
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          Summary · Lecture 4: Cell Division
+        </span>
+        <motion.span
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.25, duration: 0.3 }}
+          className="inline-flex items-center gap-1 rounded-full bg-primary/8 border border-primary/20 px-2 py-0.5 text-[10px] font-medium text-primary"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          AI Generated
+        </motion.span>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="rounded-lg border border-border bg-background p-4 space-y-3"
+      >
+        {points.map((pt, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 + 0.13 * i, duration: 0.3 }}
+            className="flex items-start gap-2 text-xs text-foreground/80 leading-snug"
+          >
             <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
             {pt}
-          </div>
+          </motion.div>
         ))}
-      </div>
-      <div className="rounded-lg border border-border bg-background p-4">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">
-          Flashcards generated
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {["What is mitosis?", "Mitosis vs Meiosis", "Spindle apparatus", "4 stages of mitosis"].map(
-            (c) => (
-              <span
-                key={c}
-                className="inline-flex items-center gap-1 rounded border border-primary/20 bg-primary/5 text-primary text-xs px-2 py-0.5 font-medium"
-              >
-                <BookOpen className="h-2.5 w-2.5" />
-                {c}
-              </span>
-            )
-          )}
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.48, duration: 0.35 }}
+        className="rounded-lg border border-border bg-background p-4"
+      >
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Flashcards generated
+          </p>
+          <span className="text-[10px] font-semibold text-primary">{cards.length} cards</span>
         </div>
-      </div>
+        <div className="flex flex-wrap gap-1.5">
+          {cards.map((c, i) => (
+            <motion.span
+              key={c}
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.58 + 0.09 * i, duration: 0.28 }}
+              className="inline-flex items-center gap-1 rounded border border-primary/20 bg-primary/5 text-primary text-xs px-2 py-0.5 font-medium"
+            >
+              <BookOpen className="h-2.5 w-2.5" />
+              {c}
+            </motion.span>
+          ))}
+        </div>
+      </motion.div>
     </div>
   )
 }
@@ -62,10 +101,23 @@ function OrganiseMockup() {
   ]
 
   return (
-    <div className="rounded-lg border border-border bg-background overflow-hidden pointer-events-none select-none">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="rounded-lg border border-border bg-background overflow-hidden pointer-events-none select-none"
+    >
       <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center justify-between">
         <span className="text-xs font-semibold text-foreground">This week</span>
-        <span className="text-[10px] text-muted-foreground">2 subjects · 1 exam</span>
+        <motion.span
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.3 }}
+          className="inline-flex items-center gap-1 text-[10px] text-primary font-medium"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          Plan optimised
+        </motion.span>
       </div>
       <div className="grid grid-cols-7 gap-0.5 p-2.5">
         {days.map((day, i) => {
@@ -76,97 +128,175 @@ function OrganiseMockup() {
                 {day}
               </p>
               {dayTasks.map((task, j) => (
-                <div
+                <motion.div
                   key={j}
-                  className={`rounded px-1 py-0.5 text-[9px] font-medium border leading-tight ${task.cls}`}
+                  initial={{ opacity: 0, scaleY: 0.6 }}
+                  animate={{ opacity: 1, scaleY: 1 }}
+                  transition={{ delay: 0.12 + 0.07 * (i + j), duration: 0.28, ease: "easeOut" }}
+                  className={`rounded px-1 py-0.5 text-[9px] font-medium border leading-tight origin-top ${task.cls}`}
                 >
                   {task.label}
-                </div>
+                </motion.div>
               ))}
             </div>
           )
         })}
       </div>
-    </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.7, duration: 0.3 }}
+        className="px-4 py-2 border-t border-border bg-muted/20 flex items-center gap-1.5"
+      >
+        <span className="text-[10px] text-muted-foreground">2 subjects · 1 exam · </span>
+        <span className="text-[10px] font-semibold text-primary">6 sessions planned</span>
+      </motion.div>
+    </motion.div>
   )
 }
 
 function CareerMockup() {
+  const skills = ["Python", "Data Analysis", "React", "SQL", "Figma"]
+
   return (
-    <div className="rounded-lg border border-border bg-background p-5 space-y-4 pointer-events-none select-none">
-      <div className="space-y-1.5">
-        <div className="h-4 w-36 rounded bg-foreground/20" />
-        <div className="h-2.5 w-44 rounded bg-muted-foreground/20 mt-1" />
-        <div className="h-2.5 w-36 rounded bg-muted-foreground/15" />
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="rounded-lg border border-border bg-background overflow-hidden pointer-events-none select-none"
+    >
+      {/* ATS score header */}
+      <div className="px-5 pt-4 pb-3 border-b border-border bg-muted/20 flex items-center justify-between">
+        <div className="space-y-1">
+          <motion.div initial={{ width: 0 }} animate={{ width: "9rem" }} transition={{ delay: 0.1, duration: 0.4 }} className="h-3.5 rounded bg-foreground/20" />
+          <motion.div initial={{ width: 0 }} animate={{ width: "11rem" }} transition={{ delay: 0.2, duration: 0.35 }} className="h-2 rounded bg-muted-foreground/15" />
+        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4, duration: 0.3 }}
+          className="flex flex-col items-center"
+        >
+          <span className="text-xs font-bold text-primary">94%</span>
+          <span className="text-[9px] text-muted-foreground">ATS match</span>
+        </motion.div>
       </div>
-      <div>
-        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-          Experience
-        </p>
-        <div className="space-y-2.5 pl-2.5 border-l-2 border-primary/20">
-          <div>
-            <div className="h-2.5 w-44 rounded bg-foreground/15 mb-1" />
-            <div className="h-2 w-56 rounded bg-muted-foreground/15" />
-            <div className="h-2 w-48 rounded bg-muted-foreground/10 mt-1" />
+
+      <div className="p-5 space-y-4">
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+            Experience
+          </p>
+          <div className="space-y-2.5 pl-2.5 border-l-2 border-primary/20">
+            {[[44, 56, 48], [36, 52]].map((widths, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 + 0.15 * i, duration: 0.3 }}
+              >
+                {widths.map((w, j) => (
+                  <div key={j} className={`h-${j === 0 ? "2.5" : "2"} rounded mb-1`} style={{ width: `${w * 1.4}px`, background: j === 0 ? "hsl(var(--foreground)/0.15)" : "hsl(var(--muted-foreground)/0.12)" }} />
+                ))}
+              </motion.div>
+            ))}
           </div>
-          <div>
-            <div className="h-2.5 w-36 rounded bg-foreground/10 mb-1" />
-            <div className="h-2 w-52 rounded bg-muted-foreground/10" />
+        </div>
+
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+            Skills
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {skills.map((s, i) => (
+              <motion.span
+                key={s}
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.45 + 0.07 * i, duration: 0.25 }}
+                className="rounded border border-border bg-muted/50 text-[9px] px-1.5 py-0.5 text-muted-foreground font-medium"
+              >
+                {s}
+              </motion.span>
+            ))}
           </div>
         </div>
       </div>
-      <div>
-        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-          Skills
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {["Python", "Data Analysis", "React", "SQL", "Figma"].map((s) => (
-            <span
-              key={s}
-              className="rounded border border-border bg-muted/50 text-[9px] px-1.5 py-0.5 text-muted-foreground font-medium"
-            >
-              {s}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
+    </motion.div>
   )
 }
 
 function PracticeMockup() {
   return (
-    <div className="rounded-lg border border-border bg-background overflow-hidden pointer-events-none select-none">
-      <div className="px-4 py-3 border-b border-border bg-muted/30">
-        <p className="text-xs font-semibold text-foreground">Interview Simulator</p>
-        <p className="text-[10px] text-muted-foreground">Behavioural · Question 2 of 5</p>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="rounded-lg border border-border bg-background overflow-hidden pointer-events-none select-none"
+    >
+      <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold text-foreground">Interview Simulator</p>
+          <p className="text-[10px] text-muted-foreground">Behavioural · Question 2 of 5</p>
+        </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6, duration: 0.3 }}
+          className="flex flex-col items-end"
+        >
+          <span className="text-sm font-bold text-primary">8<span className="text-xs text-muted-foreground font-normal">/10</span></span>
+          <span className="text-[9px] text-muted-foreground">score</span>
+        </motion.div>
       </div>
       <div className="p-4 space-y-3">
-        <div className="rounded-lg bg-muted/50 p-3">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1, duration: 0.3 }}
+          className="rounded-lg bg-muted/50 p-3"
+        >
           <p className="text-xs font-medium text-foreground">
             Tell me about a time you had to learn something quickly under pressure.
           </p>
-        </div>
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.25, duration: 0.3 }}
+          className="rounded-lg border border-primary/20 bg-primary/5 p-3"
+        >
           <p className="text-[11px] text-foreground/80 leading-relaxed">
             "During finals week my lab partner dropped out, so I had to learn the full data-analysis pipeline solo in two days…"
           </p>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.42, duration: 0.3 }}
+          className="rounded-lg border border-border bg-muted/20 p-3 space-y-2"
+        >
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Feedback
           </p>
-          <div className="flex items-start gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
-            <span className="shrink-0">✓</span>
-            <span>Good use of a specific, concrete situation.</span>
-          </div>
-          <div className="flex items-start gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
-            <span className="shrink-0">→</span>
-            <span>Explain the outcome — what did you deliver, and what did you learn?</span>
-          </div>
-        </div>
+          {[
+            { icon: "✓", text: "Good use of a specific, concrete situation.", cls: "text-emerald-600 dark:text-emerald-400" },
+            { icon: "→", text: "Explain the outcome — what did you deliver, and what did you learn?", cls: "text-amber-600 dark:text-amber-400" },
+          ].map((item, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.52 + 0.1 * i, duration: 0.25 }}
+              className={`flex items-start gap-1.5 text-[11px] ${item.cls}`}
+            >
+              <span className="shrink-0">{item.icon}</span>
+              <span>{item.text}</span>
+            </motion.div>
+          ))}
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -230,6 +360,10 @@ export function ToolsTabs() {
       <div className="container px-4 md:px-6 mx-auto">
 
         <div className="text-center mb-12 space-y-3">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3.5 py-1 text-xs font-semibold text-primary mb-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            See AI at Work
+          </div>
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
             Six tools. One workspace.
           </h2>

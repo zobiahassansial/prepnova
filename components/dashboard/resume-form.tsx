@@ -117,7 +117,7 @@ export function ResumeForm({ data, onChange }: ResumeFormProps) {
                     </div>
                     <Button onClick={handleAIGenerate} disabled={generating} size="sm" className="ml-auto">
                         {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                        {generating ? "Generating Full Resume..." : "Generate Full Resume with AI"}
+                        {generating ? "Generating Full Resume..." : "Generate Resume with AI"}
                     </Button>
                 </div>
             </div>
