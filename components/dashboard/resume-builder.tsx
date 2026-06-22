@@ -24,6 +24,151 @@ import { TemplateGallery } from "./template-gallery"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Code } from "lucide-react"
+import { UploadTemplateEditor } from "./upload-template-editor"
+import type { TemplateDefinition } from "@/types/template-definition"
+
+// ── Resume Score ──────────────────────────────────────────────────────────────
+
+interface ScoreBreakdown {
+    label: string
+    earned: number
+    max: number
+    tip: string
+}
+
+function calculateResumeScore(data: ResumeData): { score: number; breakdown: ScoreBreakdown[] } {
+    const breakdown: ScoreBreakdown[] = []
+
+    // Personal Info (20 pts)
+    const pi = data.personalInfo
+    let piScore = 0
+    if (pi.fullName?.trim()) piScore += 4
+    if (pi.email?.trim()) piScore += 4
+    if (pi.phone?.trim()) piScore += 3
+    if (pi.location?.trim()) piScore += 3
+    if (pi.linkedin?.trim()) piScore += 3
+    if (pi.website?.trim()) piScore += 3
+    breakdown.push({
+        label: "Contact Info",
+        earned: piScore,
+        max: 20,
+        tip: "Add name, email, phone, location, LinkedIn & website for full marks."
+    })
+
+    // Summary (15 pts)
+    const sumLen = data.summary?.trim().length ?? 0
+    const sumScore = sumLen >= 120 ? 15 : sumLen >= 60 ? 10 : sumLen > 0 ? 5 : 0
+    breakdown.push({
+        label: "Summary",
+        earned: sumScore,
+        max: 15,
+        tip: "Write a 120+ character professional summary for full marks."
+    })
+
+    // Experience (25 pts)
+    const expCount = data.experience?.length ?? 0
+    let expScore = 0
+    if (expCount >= 1) expScore += 10
+    if (expCount >= 2) expScore += 5
+    const expWithDesc = data.experience?.filter(e => e.description?.trim().length >= 50).length ?? 0
+    expScore += Math.min(expWithDesc * 5, 10)
+    breakdown.push({
+        label: "Experience",
+        earned: expScore,
+        max: 25,
+        tip: "Add 2+ jobs with detailed descriptions (50+ chars each)."
+    })
+
+    // Education (15 pts)
+    const eduCount = data.education?.length ?? 0
+    const eduScore = eduCount >= 2 ? 15 : eduCount === 1 ? 10 : 0
+    breakdown.push({
+        label: "Education",
+        earned: eduScore,
+        max: 15,
+        tip: "Add 2+ education entries for full marks."
+    })
+
+    // Skills (15 pts)
+    const skillCount = data.skills?.length ?? 0
+    const skillScore = skillCount >= 10 ? 15 : skillCount >= 6 ? 10 : skillCount >= 3 ? 5 : 0
+    breakdown.push({
+        label: "Skills",
+        earned: skillScore,
+        max: 15,
+        tip: "Add 10+ skills for full marks."
+    })
+
+    // Projects (10 pts)
+    const projCount = data.projects?.length ?? 0
+    const projScore = projCount >= 2 ? 10 : projCount === 1 ? 5 : 0
+    breakdown.push({
+        label: "Projects",
+        earned: projScore,
+        max: 10,
+        tip: "Add 2+ projects to stand out."
+    })
+
+    const score = breakdown.reduce((acc, b) => acc + b.earned, 0)
+    return { score, breakdown }
+}
+
+function getScoreColor(score: number) {
+    if (score >= 80) return { bar: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400", label: "Excellent" }
+    if (score >= 60) return { bar: "bg-blue-500", text: "text-blue-600 dark:text-blue-400", label: "Good" }
+    if (score >= 35) return { bar: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", label: "Fair" }
+    return { bar: "bg-rose-500", text: "text-rose-600 dark:text-rose-400", label: "Weak" }
+}
+
+function ResumeScoreBar({ data }: { data: ResumeData }) {
+    const { score, breakdown } = useMemo(() => calculateResumeScore(data), [data])
+    const { bar, text, label } = getScoreColor(score)
+
+    return (
+        <div className="relative group flex items-center gap-2 cursor-default select-none">
+            <div className="hidden sm:flex flex-col items-end gap-0.5">
+                <span className={`text-[11px] font-semibold leading-none ${text}`}>{label}</span>
+                <span className="text-[10px] text-muted-foreground leading-none">{score}/100</span>
+            </div>
+            <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                    className={`h-full rounded-full transition-all duration-500 ${bar}`}
+                    style={{ width: `${score}%` }}
+                />
+            </div>
+
+            {/* Hover breakdown panel */}
+            <div className="absolute right-0 top-full mt-2 w-64 z-50 hidden group-hover:block">
+                <div className="rounded-lg border bg-popover shadow-lg p-3 text-popover-foreground">
+                    <p className="font-semibold text-sm mb-2">Resume Score: {score}/100</p>
+                    <div className="space-y-2">
+                        {breakdown.map(b => (
+                            <div key={b.label} className="space-y-0.5">
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">{b.label}</span>
+                                    <span className={b.earned === b.max ? "text-emerald-500 font-medium" : "text-foreground"}>
+                                        {b.earned}/{b.max}
+                                    </span>
+                                </div>
+                                <div className="h-1 rounded-full bg-muted overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full ${bar} transition-all duration-300`}
+                                        style={{ width: `${(b.earned / b.max) * 100}%` }}
+                                    />
+                                </div>
+                                {b.earned < b.max && (
+                                    <p className="text-[10px] text-muted-foreground/70 leading-snug">{b.tip}</p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function usePageCount(ref: React.RefObject<HTMLDivElement>) {
     const [pages, setPages] = useState(1)
@@ -75,6 +220,7 @@ export function ResumeBuilder() {
     const [coverTemplateTouched, setCoverTemplateTouched] = useState(false)
     const [resumeTemplatePopoverOpen, setResumeTemplatePopoverOpen] = useState(false)
     const [coverTemplatePopoverOpen, setCoverTemplatePopoverOpen] = useState(false)
+    const [uploadEditorOpen, setUploadEditorOpen] = useState(false)
 
     // Derived active templates (Default to 'basic' for resume if untouched, 'modern' for cover if untouched? 
     // User said: "Resume uses Basic template... If user never touches Templates... Resume stays Basic".
@@ -194,6 +340,17 @@ export function ResumeBuilder() {
         setCoverTemplatePopoverOpen(false)
     }, [])
 
+    const handleSaveOverlayTemplate = useCallback((def: TemplateDefinition) => {
+        setResumeTemplateTouched(true)
+        setResumeData(prev => ({
+            ...prev,
+            template:                   "imported-template",
+            activeTemplateId:           "imported-template",
+            importedTemplateDefinition: def,
+        }))
+        setUploadEditorOpen(false)
+    }, [])
+
     return (
         <div className="flex flex-col h-[calc(100vh-8rem)]">
             {showUpgrade && (
@@ -204,6 +361,15 @@ export function ResumeBuilder() {
                     onClose={() => setShowUpgrade(false)}
                 />
             )}
+
+            {/* Upload Template editor */}
+            <UploadTemplateEditor
+                open={uploadEditorOpen}
+                onClose={() => setUploadEditorOpen(false)}
+                resumeData={resumeData}
+                initial={resumeData.importedTemplateDefinition}
+                onSave={handleSaveOverlayTemplate}
+            />
             {/* Toolbar */}
             <div className="flex items-center justify-between border-b pb-4 mb-4 bg-background z-10">
                 <div className="flex items-center gap-2">
@@ -218,24 +384,29 @@ export function ResumeBuilder() {
                                     Resume Templates
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-[400px] p-4" align="start">
-                                <h3 className="font-semibold mb-2">Select Resume Template</h3>
+                            <PopoverContent className="w-[580px] p-4" align="start">
+                                <h3 className="font-semibold mb-3">Select Resume Template</h3>
                                 <TemplateGallery
                                     selected={resumeData.template}
                                     activeTemplate={activeResumeTemplate}
                                     onSelect={handleSelectResumeTemplate}
                                     customTemplateHtml={resumeData.customTemplateHtml}
+                                    importedTemplateDefinition={resumeData.importedTemplateDefinition}
+                                    onUpload={() => {
+                                        setResumeTemplatePopoverOpen(false)
+                                        setUploadEditorOpen(true)
+                                    }}
                                 />
                             </PopoverContent>
                         </Popover>
 
-                        {/* Custom HTML Dialog */}
+                        {/* Custom Template Code dialog (HTML mode) */}
                         {resumeData.template === "custom" && (
                             <Dialog>
                                 <DialogTrigger asChild>
                                     <Button variant="outline" size="sm" className="h-8 bg-slate-900 text-white hover:bg-slate-800 hover:text-white">
                                         <Code className="mr-2 h-3 w-3" />
-                                        Edit HTML
+                                        Custom Template Code
                                     </Button>
                                 </DialogTrigger>
                                 <DialogContent className="w-[800px] max-w-[90vw]">
@@ -280,6 +451,9 @@ export function ResumeBuilder() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Resume Score Bar */}
+                    <ResumeScoreBar data={resumeData} />
+
                     {/* Page Count Display */}
                     <span className="text-sm text-muted-foreground mr-2 hidden md:inline-block">
                         {pageCount} page{pageCount > 1 ? "s" : ""}

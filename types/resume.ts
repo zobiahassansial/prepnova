@@ -46,6 +46,9 @@ export interface ProjectItem {
     technologies: string[]
 }
 
+import type { CustomOverlayTemplate } from "./overlay"
+import type { TemplateDefinition } from "./template-definition"
+
 export interface ResumeData {
     id?: string
     userId: string
@@ -53,6 +56,10 @@ export interface ResumeData {
     template: string // Using string to support the 16 new template IDs flexibly
     activeTemplateId?: string
     customTemplateHtml?: string
+    /** Populated when template === "custom-overlay" (legacy overlay system) */
+    customOverlayTemplate?: CustomOverlayTemplate
+    /** Populated when template === "imported-template" (new editable template system) */
+    importedTemplateDefinition?: TemplateDefinition
     personalInfo: PersonalInfo
     summary: string
     experience: ExperienceItem[]

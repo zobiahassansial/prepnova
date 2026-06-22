@@ -173,10 +173,8 @@ export function Hero() {
             </div>
 
             <div className="space-y-5">
-              <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-bold tracking-tight text-foreground leading-[1.12]">
-                Academic Learning
-                <br />
-                <span className="text-primary">with AI.</span>
+              <h1 className="text-[clamp(46px,4.5vw,68px)] font-bold tracking-tight text-foreground leading-[1.12]">
+                Academic Learning{" "}<span className="text-primary">with AI.</span>
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-lg mx-auto lg:mx-0">
                 Turn lecture notes into summaries and flashcards, plan a week that adapts to your deadlines, build a resume, and practise interviews — all in one workspace.

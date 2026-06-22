@@ -1,3 +1,4 @@
+export { TemplateBasic } from './template-basic';
 export { TemplateClassic } from './template-classic';
 export { TemplateModern } from './template-modern';
 export { TemplateMinimal } from './template-minimal';

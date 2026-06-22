@@ -7,7 +7,6 @@ import { Footer } from "@/components/layout/footer"
 import { PricingCards } from "@/components/pricing/PricingCards"
 import { AnimatedSection } from "@/components/ui/animated-section"
 import { Hero } from "@/components/home/hero"
-import { BeforeAfter } from "@/components/home/before-after"
 import { ScenarioSection } from "@/components/home/scenario-section"
 import { ToolsTabs } from "@/components/home/tools-tabs"
 import { FaqAccordion } from "@/components/home/faq-accordion"
@@ -148,10 +147,7 @@ export default function Home() {
           </section>
         </AnimatedSection>
 
-        {/* 3. See the AI at Work */}
-        <BeforeAfter />
-
-        {/* 4. See AI at Work — tabs */}
+        {/* 3. See AI at Work — tabs */}
         <ToolsTabs />
 
         {/* 5. Scenarios */}
@@ -191,10 +187,10 @@ export default function Home() {
           <section className="py-24 md:py-32 bg-background">
             <div className="container px-4 text-center max-w-2xl mx-auto space-y-6">
               <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">
-                Academic Learning with AI —<br className="hidden sm:block" /> start today.
+                Your semester, under control.
               </h2>
               <p className="text-lg text-muted-foreground leading-relaxed">
-                Join our early-access community. Your feedback shapes what we build next.
+                Stay organised, study smarter, and be ready for every deadline.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
                 <Link href="/signup">

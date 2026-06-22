@@ -60,7 +60,13 @@ export function Footer() {
                                     <Link href="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</Link>
                                 </li>
                                 <li>
-                                    <Link href="/terms-of-service" className="hover:text-primary transition-colors">Terms of Service</Link>
+                                    <Link href="/terms-of-service" className="hover:text-primary transition-colors">Terms &amp; Conditions</Link>
+                                </li>
+                                <li>
+                                    <Link href="/cancellation-policy" className="hover:text-primary transition-colors">Cancellation &amp; Refunds</Link>
+                                </li>
+                                <li>
+                                    <Link href="/ownership" className="hover:text-primary transition-colors">Ownership Statement</Link>
                                 </li>
                                 <li>
                                     <Link href="/cookie-policy" className="hover:text-primary transition-colors">Cookie Policy</Link>
@@ -74,9 +80,11 @@ export function Footer() {
                 <div className="mt-12 md:mt-16 border-t pt-8">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
                         <p>© {new Date().getFullYear()} PrepNova. All rights reserved.</p>
-                        <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-6 flex-wrap justify-center md:justify-end">
                             <Link href="/privacy-policy" className="hover:text-primary transition-colors">Privacy</Link>
                             <Link href="/terms-of-service" className="hover:text-primary transition-colors">Terms</Link>
+                            <Link href="/cancellation-policy" className="hover:text-primary transition-colors">Refunds</Link>
+                            <Link href="/ownership" className="hover:text-primary transition-colors">Ownership</Link>
                             <Link href="/cookie-policy" className="hover:text-primary transition-colors">Cookies</Link>
                         </div>
                     </div>
