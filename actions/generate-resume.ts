@@ -1,12 +1,13 @@
 "use server"
 
+import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 import { ResumeData } from "@/types/resume"
 
-// Removed local genAI initialization to use shared config
-
-
 export async function generateResumeContent(currentData: ResumeData, tone?: string, jobDescription?: string): Promise<Partial<ResumeData>> {
+    const session = await auth()
+    if (!session?.user?.id) throw new Error("Authentication required.")
+
     const model = getGroqModel()
 
     const hasExperience = currentData.experience.length > 0
@@ -134,6 +135,9 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
 }
 
 export async function optimizeCoverLetter(coverLetter: string, resumeData: ResumeData, tone?: string): Promise<string> {
+    const session = await auth()
+    if (!session?.user?.id) throw new Error("Authentication required.")
+
     const model = getGroqModel()
 
     const prompt = `You are a professional career coach specializing in cover letters. Optimize and improve the following cover letter to make it more compelling, impactful, and professional.
@@ -177,6 +181,9 @@ Return ONLY the improved cover letter text. No markdown. No extra commentary.`
 }
 
 export async function generateCoverLetter(resumeData: ResumeData, tone?: string): Promise<string> {
+    const session = await auth()
+    if (!session?.user?.id) throw new Error("Authentication required.")
+
     const model = getGroqModel()
 
     const latestRole = resumeData.experience[0]
@@ -225,6 +232,9 @@ Return ONLY the cover letter text. No markdown. No extra commentary.`
 }
 
 export async function matchCoverLetterToJob(coverLetter: string, jobDescription: string, resumeData: ResumeData, tone?: string): Promise<string> {
+    const session = await auth()
+    if (!session?.user?.id) throw new Error("Authentication required.")
+
     const model = getGroqModel()
 
     const prompt = `You are an expert career coach. Rewrite the following cover letter to be perfectly tailored for the target job description.

@@ -1,8 +1,14 @@
 "use server"
 
+import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
 export async function generateFlashcardsFromText(text: string) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        return { error: "Authentication required." }
+    }
+
     if (!process.env.GROQ_API_KEY) {
         return { error: "AI service is not configured. Please contact support." }
     }

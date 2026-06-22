@@ -18,6 +18,25 @@ export interface Deck {
   lastStudied?: any;
 }
 
+export function filterValidFlashcards(
+    cards: { front: string; back: string }[] | null | undefined
+): { front: string; back: string }[] {
+    if (!Array.isArray(cards)) return []
+    return cards.filter(
+        c => c && typeof c.front === "string" && c.front.trim().length > 0
+            && typeof c.back === "string" && c.back.trim().length > 0
+    )
+}
+
+export function scoreFlashcardDeck(
+    cards: { front: string; back: string }[],
+    results: boolean[]
+): number {
+    if (!cards.length) return 0
+    const correct = results.filter(Boolean).length
+    return Math.round((correct / cards.length) * 100)
+}
+
 export function calculateNextReview(card: Flashcard, rating: number) {
   let { interval, repetition, easeFactor } = card;
 

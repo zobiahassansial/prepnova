@@ -187,27 +187,32 @@ export const safepayWebhook = onRequest(
         const tracker   = String(body?.notification?.tracker ?? body?.token ?? "")
         const signature = String(body?.signature ?? "")
 
-        if (tracker && signature) {
-            try {
-                const expected = crypto
-                    .createHmac("sha256", SAFEPAY_SECRET_KEY.value())
-                    .update(tracker)
-                    .digest("hex")
-                const expBuf = Buffer.from(expected, "hex")
-                const sigBuf = Buffer.from(signature, "hex")
-                const valid  =
-                    expBuf.length === sigBuf.length &&
-                    crypto.timingSafeEqual(expBuf, sigBuf)
-                if (!valid) {
-                    logger.error("[safepayWebhook] Invalid HMAC signature")
-                    res.status(401).json({ error: "Invalid signature" })
-                    return
-                }
-            } catch (err) {
-                logger.error("[safepayWebhook] Signature check threw:", err)
-                res.status(401).json({ error: "Signature check failed" })
+        // Require both tracker and signature — reject if either is missing
+        if (!tracker || !signature) {
+            logger.error("[safepayWebhook] Missing tracker or signature in webhook payload")
+            res.status(401).json({ error: "Missing signature" })
+            return
+        }
+
+        try {
+            const expected = crypto
+                .createHmac("sha256", SAFEPAY_SECRET_KEY.value())
+                .update(tracker)
+                .digest("hex")
+            const expBuf = Buffer.from(expected, "hex")
+            const sigBuf = Buffer.from(signature, "hex")
+            const valid  =
+                expBuf.length === sigBuf.length &&
+                crypto.timingSafeEqual(expBuf, sigBuf)
+            if (!valid) {
+                logger.error("[safepayWebhook] Invalid HMAC signature")
+                res.status(401).json({ error: "Invalid signature" })
                 return
             }
+        } catch (err) {
+            logger.error("[safepayWebhook] Signature check threw:", err)
+            res.status(401).json({ error: "Signature check failed" })
+            return
         }
 
         const state = String(body?.notification?.state ?? body?.state ?? "").toUpperCase()

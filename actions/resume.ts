@@ -1,5 +1,6 @@
 "use server"
 
+import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
 type ResumeInput = {
@@ -13,6 +14,9 @@ type ResumeInput = {
 }
 
 export async function generateResumeFromForm(data: ResumeInput) {
+  const session = await auth()
+  if (!session?.user?.id) return { error: "Authentication required." }
+
   const apiKey = process.env.GROQ_API_KEY
 
   if (!apiKey) {

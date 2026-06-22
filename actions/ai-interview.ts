@@ -1,8 +1,12 @@
 "use server"
 
+import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
 export async function getLiveInterviewHelp(transcript: string) {
+    const session = await auth()
+    if (!session?.user?.id) return { error: "Authentication required." }
+
     if (!transcript?.trim()) return { error: "No text detected" }
     try {
         const model = getGroqModel()
@@ -29,6 +33,9 @@ export async function generateInterviewResponse(
     messages: { role: string; content: string }[],
     interviewType: string = "behavioral"
 ) {
+    const session = await auth()
+    if (!session?.user?.id) return { error: "Authentication required." }
+
     try {
         const model = getGroqModel()
 
@@ -76,6 +83,9 @@ export async function generateInterviewFeedback(
     messages: { role: string; content: string }[],
     interviewType: string = "behavioral"
 ) {
+    const session = await auth()
+    if (!session?.user?.id) return { error: "Authentication required." }
+
     try {
         const model = getGroqModel()
 

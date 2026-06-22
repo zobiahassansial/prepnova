@@ -62,6 +62,24 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "No fileUrl provided." }, { status: 400 })
         }
 
+        // SSRF guard: only allow Firebase Storage URLs for this project
+        let parsedUrl: URL
+        try {
+            parsedUrl = new URL(fileUrl)
+        } catch {
+            return NextResponse.json({ error: "Invalid file URL." }, { status: 400 })
+        }
+        const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || ""
+        const allowedHosts = [
+            "firebasestorage.googleapis.com",
+            "storage.googleapis.com",
+            `${storageBucket}`,
+        ]
+        const isAllowed = allowedHosts.some(h => parsedUrl.hostname.endsWith(h))
+        if (!isAllowed) {
+            return NextResponse.json({ error: "File URL must point to Firebase Storage." }, { status: 400 })
+        }
+
         const fileRes = await fetch(fileUrl)
         if (!fileRes.ok) {
             throw new Error(`Failed to fetch file: ${fileRes.statusText}`)

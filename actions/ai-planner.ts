@@ -1,5 +1,6 @@
 "use server"
 
+import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 
 /* -------------------------------------------------
@@ -11,6 +12,9 @@ export async function generateStudyPlan(
   hoursPerDay: number,
   days: number
 ) {
+  const session = await auth()
+  if (!session?.user?.id) return { error: "Authentication required." }
+
   const apiKey = process.env.GROQ_API_KEY
 
   if (!apiKey) {
@@ -93,6 +97,9 @@ export async function scheduleUserTasks(
   startDate?: string,
   existingSchedule?: { scheduledTime: string; durationMinutes: number; scheduledDate: string }[]
 ) {
+  const session = await auth()
+  if (!session?.user?.id) return { error: "Authentication required." }
+
   const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) return { error: "GROQ_API_KEY not configured" }
   if (!tasks || tasks.length === 0) return { error: "No tasks available to schedule" }
