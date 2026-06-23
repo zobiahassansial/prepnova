@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { useUserPlan } from "@/hooks/useUserPlan"
 import Link from "next/link"
+import { formatPKR } from "@/lib/safepay"
 
 const STORAGE_LIMIT = 3 * 1024 * 1024 * 1024 // 3 GB
 
@@ -120,7 +121,11 @@ export function SettingsForm() {
         // Billing
         const fetchBilling = async () => {
             const billingSnap = await getDocs(collection(db, "users", user.uid, "billing"))
-            setBillingHistory(billingSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+            setBillingHistory(
+                billingSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter((bill: any) => bill.status === "paid")
+            )
         }
         fetchBilling()
 
@@ -883,11 +888,13 @@ export function SettingsForm() {
                                         <div>
                                             <p className="text-sm font-medium capitalize">{bill.plan} Plan</p>
                                             <p className="text-xs text-muted-foreground">
-                                                {bill.date?.toDate ? new Date(bill.date.toDate()).toLocaleDateString() : "N/A"}
+                                                {bill.paidAt || bill.date
+                                                    ? new Date(bill.paidAt || (bill.date?.toDate ? bill.date.toDate() : bill.date)).toLocaleDateString()
+                                                    : "N/A"}
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-bold">${(bill.amount / 100).toFixed(2)}</p>
+                                            <p className="font-bold">{formatPKR(Number(bill.amount || 0))}</p>
                                             <span className={`text-xs px-2 py-0.5 rounded-full ${bill.status === "paid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                                                 {bill.status}
                                             </span>
@@ -904,7 +911,7 @@ export function SettingsForm() {
                     <Card className="border-orange-200 dark:border-orange-900">
                         <CardHeader>
                             <CardTitle className="text-orange-700 dark:text-orange-400">Cancel Subscription</CardTitle>
-                            <CardDescription>You'll retain access until end of billing cycle.</CardDescription>
+                            <CardDescription>You&apos;ll retain access until end of billing cycle.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Button
@@ -939,4 +946,3 @@ export function SettingsForm() {
         </Tabs>
     )
 }
-

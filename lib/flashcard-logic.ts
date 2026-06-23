@@ -1,3 +1,6 @@
+// FirestoreTimestamp covers both firebase-admin Timestamp and firebase client Timestamp
+type FirestoreTimestamp = { toDate(): Date; seconds: number; nanoseconds: number }
+
 export interface Flashcard {
   id: string;
   front: string;
@@ -5,7 +8,7 @@ export interface Flashcard {
   interval: number;
   repetition: number;
   easeFactor: number;
-  nextReviewDate: any;
+  nextReviewDate: Date | FirestoreTimestamp;
   status: 'learning' | 'review' | 'mastered';
 }
 
@@ -14,8 +17,8 @@ export interface Deck {
   title: string;
   sourceFileId?: string;
   cards: Flashcard[];
-  createdAt: any;
-  lastStudied?: any;
+  createdAt: Date | FirestoreTimestamp;
+  lastStudied?: Date | FirestoreTimestamp;
 }
 
 export function filterValidFlashcards(

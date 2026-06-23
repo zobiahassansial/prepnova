@@ -1,6 +1,8 @@
 "use server"
 
-const pdf = require("pdf-parse")
+// pdf-parse ships CommonJS only; require() is necessary.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdf = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>
 
 export async function extractTextFromPDF(formData: FormData): Promise<{ text?: string, error?: string }> {
     const file = formData.get("file") as File

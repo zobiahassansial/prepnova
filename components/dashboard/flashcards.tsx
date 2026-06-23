@@ -10,9 +10,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { auth, db } from "@/lib/firebase" // Firebase imports
 import { onAuthStateChanged } from "firebase/auth"
-import { addDoc, collection, onSnapshot, query, where, Timestamp, doc, getDoc } from "firebase/firestore"
+import { onSnapshot, query, where, collection, doc, getDoc } from "firebase/firestore"
 import { extractTextFromPDF } from "@/actions/pdf-loader"
-import { checkClientQuota, incrementClientUsage } from "@/lib/usage-client"
+import { saveDeck } from "@/actions/save-deck"
 import { generateFlashcardsFromText } from "@/actions/ai-flashcards"
 import { Upload, BrainCircuit } from "lucide-react"
 import { UpgradeModal } from "@/components/pricing/upgrade-modal"
@@ -101,49 +101,36 @@ export function FlashcardsApp() {
         setLoading(true)
         setAiLoading(true)
 
-        // Check Limit
-        const allowed = await checkClientQuota(user.uid, "flashcards").then(r => r.allowed)
-        if (!allowed) {
-            setLoading(false)
-            setAiLoading(false)
-            setShowUpgrade(true)
-            return
-        }
-
         try {
-            // 2. Extract Text
             const formData = new FormData()
             formData.append("file", aiFile)
             const { text, error: pdfError } = await extractTextFromPDF(formData)
-
             if (pdfError || !text) throw new Error(pdfError || "Failed to extract text")
 
-            // 3. Generate Flashcards
             const { flashcards, error: aiError } = await generateFlashcardsFromText(text)
             if (aiError || !flashcards) throw new Error(aiError)
 
-            // 4. Save Deck
-            await addDoc(collection(db, "decks"), {
-                userId: user.uid,
-                title: aiTitle,
-                cards: flashcards,
-                mastery: 0,
-                count: flashcards.length,
-                createdAt: Timestamp.now(),
-                updatedAt: Timestamp.now()
-            })
+            // saveDeck enforces quota server-side via Firestore transaction.
+            const result = await saveDeck({ title: aiTitle, cards: flashcards })
+            if (!result.success) {
+                if (result.error?.includes("used") && result.error?.includes("deck")) {
+                    setShowUpgrade(true)
+                } else {
+                    toast.error(result.error || "Failed to save deck.")
+                }
+                return
+            }
+
             await logActivity(user.uid, "deck_created", `Created AI deck: ${aiTitle}`, { count: flashcards.length, type: "AI" })
-
-            await incrementClientUsage(user.uid, "flashcards")
-
             toast.success("Deck generated successfully!")
             setAiOpen(false)
             setAiFile(null)
             setAiTitle("")
 
-        } catch (e: any) {
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : "Failed to generate deck"
             console.error(e)
-            toast.error(e.message || "Failed to generate deck")
+            toast.error(msg)
         } finally {
             setAiLoading(false)
             setLoading(false)
@@ -172,30 +159,21 @@ export function FlashcardsApp() {
         if (!newDeckTitle || !user) return
         setLoading(true)
 
-        // Check Limit
-        const allowed = await checkClientQuota(user.uid, "flashcards").then(r => r.allowed)
-        if (!allowed) {
-            setLoading(false)
-            setShowUpgrade(true)
-            return
-        }
-
         try {
-            await addDoc(collection(db, "decks"), {
-                userId: user.uid,
-                title: newDeckTitle,
-                cards: [],
-                mastery: 0,
-                count: 0,
-                createdAt: Timestamp.now(),
-                updatedAt: Timestamp.now()
-            })
+            // saveDeck enforces quota server-side via Firestore transaction.
+            const result = await saveDeck({ title: newDeckTitle, cards: [] })
+            if (!result.success) {
+                if (result.error?.includes("used") && result.error?.includes("deck")) {
+                    setShowUpgrade(true)
+                } else {
+                    toast.error(result.error || "Failed to create deck.")
+                }
+                return
+            }
             await logActivity(user.uid, "deck_created", `Created deck: ${newDeckTitle}`, { count: 0 })
-
             toast.success("Deck created!")
             setNewDeckOpen(false)
             setNewDeckTitle("")
-            // No manual update needed, onSnapshot will handle it!
         } catch (error) {
             console.error(error)
             toast.error("Failed to create deck")

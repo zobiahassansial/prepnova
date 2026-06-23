@@ -18,7 +18,12 @@ export function useUserProfile() {
 
     useEffect(() => {
         if (!user) {
+            // Resetting to null synchronously is intentional here: we need to
+            // clear the profile immediately when the user signs out, and the
+            // alternative (a ref + callback) would add complexity without benefit.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setProfile(null)
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setLoading(false)
             return
         }

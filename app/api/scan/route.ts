@@ -4,7 +4,13 @@ import { verifyIdToken } from "@/lib/firebase-admin"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { checkLimit, incrementUsage, decrementUsage } from "@/lib/limits"
 
-const PDFParser = require("pdf2json")
+// pdf2json ships CommonJS only; require() is necessary.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PDFParser = require("pdf2json") as { new(a: null, b: number): {
+    on(event: string, cb: (d?: unknown) => void): void
+    parseBuffer(b: Buffer): void
+    getRawTextContent(): string
+} }
 
 async function countPdfPages(buffer: Buffer): Promise<number> {
     return new Promise((resolve) => {
@@ -39,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 2. Rate limit ─────────────────────────────────────────────────────────
-    const rate = checkRateLimit(userId)
+    const rate = await checkRateLimit(userId)
     if (!rate.allowed) {
         return NextResponse.json(
             { error: `Too many requests. Please wait ${rate.retryAfter}s before trying again.` },
@@ -85,13 +91,53 @@ export async function POST(req: NextRequest) {
             throw new Error(`Failed to fetch file: ${fileRes.statusText}`)
         }
 
+        // Enforce 10 MB maximum before buffering
+        const MAX_BYTES = 10 * 1024 * 1024
+        const contentLength = Number(fileRes.headers.get("content-length") ?? 0)
+        if (contentLength > MAX_BYTES) {
+            return NextResponse.json(
+                { error: "File exceeds the 10 MB maximum size limit." },
+                { status: 400 }
+            )
+        }
+
+        // Validate actual Content-Type from Firebase Storage response — do not
+        // trust the user-supplied fileType field alone.
+        const actualContentType = fileRes.headers.get("content-type")?.split(";")[0].trim() ?? ""
+        const ALLOWED_TYPES = [
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "image/bmp",
+        ]
+        if (actualContentType && !ALLOWED_TYPES.includes(actualContentType)) {
+            return NextResponse.json(
+                { error: `Unsupported file type: ${actualContentType}. Upload a PDF or image.` },
+                { status: 400 }
+            )
+        }
+
+        // Use the server-verified content type; fall back to user-supplied only if the
+        // server didn't return one (rare with Firebase Storage).
+        const resolvedType = actualContentType || fileType
+
         const arrayBuffer = await fileRes.arrayBuffer()
         const buffer = Buffer.from(arrayBuffer)
+
+        // Double-check size after download (Content-Length may be absent on chunked responses)
+        if (buffer.byteLength > MAX_BYTES) {
+            return NextResponse.json(
+                { error: "File exceeds the 10 MB maximum size limit." },
+                { status: 400 }
+            )
+        }
 
         let extractedText = ""
         let pages = 1
 
-        if (fileType === "application/pdf") {
+        if (resolvedType === "application/pdf") {
             pages = await countPdfPages(buffer)
 
             // Re-check with actual page count
@@ -106,11 +152,11 @@ export async function POST(req: NextRequest) {
                 pdfParser.on("pdfParser_dataReady", () => resolve(pdfParser.getRawTextContent()))
                 pdfParser.parseBuffer(buffer)
             })
-        } else if (fileType.startsWith("image/")) {
+        } else if (resolvedType.startsWith("image/")) {
             pages = 1
 
             const base64Image = buffer.toString("base64")
-            const dataUrl = `data:${fileType};base64,${base64Image}`
+            const dataUrl = `data:${resolvedType};base64,${base64Image}`
 
             const groq = getGroqModel()
             const response = await groq.chat.completions.create({
@@ -129,7 +175,10 @@ export async function POST(req: NextRequest) {
 
             extractedText = response.choices[0]?.message?.content || ""
         } else {
-            return NextResponse.json({ error: "Unsupported file type." }, { status: 400 })
+            return NextResponse.json(
+                { error: `Unsupported file type: ${resolvedType}. Upload a PDF or image.` },
+                { status: 400 }
+            )
         }
 
         // ── 4. Deduct pages ───────────────────────────────────────────────────

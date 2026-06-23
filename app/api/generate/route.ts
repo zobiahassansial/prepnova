@@ -4,7 +4,13 @@ import { verifyIdToken } from "@/lib/firebase-admin"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { checkLimit, incrementUsage, decrementUsage } from "@/lib/limits"
 
-const PDFParser = require("pdf2json")
+// pdf2json ships CommonJS only; require() is necessary.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PDFParser = require("pdf2json") as { new(a: null, b: number): {
+    on(event: string, cb: (d?: unknown) => void): void
+    parseBuffer(b: Buffer): void
+    getRawTextContent(): string
+} }
 
 const DIFFICULTY_INSTRUCTIONS: Record<string, string> = {
     easy: `
@@ -40,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 2. Rate limit ─────────────────────────────────────────────────────────
-    const rate = checkRateLimit(userId)
+    const rate = await checkRateLimit(userId)
     if (!rate.allowed) {
         return NextResponse.json(
             { error: `Too many requests. Please wait ${rate.retryAfter}s before trying again.` },

@@ -26,7 +26,7 @@ export function TemplateTech({ data }: Props) {
 
       {d.summary && (
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ color: green, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>/* Summary */</div>
+          <div style={{ color: green, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>{'/* Summary */'}</div>
           <div style={{ height: '1px', backgroundColor: 'rgba(0,255,136,0.2)', marginBottom: '10px' }} />
           <p style={{ color: muted }}>{d.summary}</p>
         </div>
@@ -34,7 +34,7 @@ export function TemplateTech({ data }: Props) {
 
       {d.skills?.length > 0 && (
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ color: green, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>/* Skills */</div>
+          <div style={{ color: green, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>{'/* Skills */'}</div>
           <div style={{ height: '1px', backgroundColor: 'rgba(0,255,136,0.2)', marginBottom: '10px' }} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {d.skills.map((s, i) => (
@@ -46,7 +46,7 @@ export function TemplateTech({ data }: Props) {
 
       {d.experience?.length > 0 && (
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ color: green, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>/* Experience */</div>
+          <div style={{ color: green, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>{'/* Experience */'}</div>
           <div style={{ height: '1px', backgroundColor: 'rgba(0,255,136,0.2)', marginBottom: '10px' }} />
           {d.experience.map((exp, i) => (
             <div key={i} style={{ backgroundColor: surface, borderRadius: '6px', padding: '12px 16px', marginBottom: '10px', borderLeft: `2px solid ${green}` }}>
@@ -63,7 +63,7 @@ export function TemplateTech({ data }: Props) {
 
       {d.education?.length > 0 && (
         <div>
-          <div style={{ color: green, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>/* Education */</div>
+          <div style={{ color: green, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>{'/* Education */'}</div>
           <div style={{ height: '1px', backgroundColor: 'rgba(0,255,136,0.2)', marginBottom: '10px' }} />
           {d.education.map((edu, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>

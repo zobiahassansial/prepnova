@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
+import { checkLimit, incrementUsage, decrementUsage } from "@/lib/limits"
 
 type ResumeInput = {
   fullName: string
@@ -16,12 +17,17 @@ type ResumeInput = {
 export async function generateResumeFromForm(data: ResumeInput) {
   const session = await auth()
   if (!session?.user?.id) return { error: "Authentication required." }
+  const userId = session.user.id
+
+  const quota = await checkLimit(userId, "resumes")
+  if (!quota.allowed) return { error: quota.error, upgradeRequired: true }
 
   const apiKey = process.env.GROQ_API_KEY
-
   if (!apiKey) {
     return { error: "GROQ_API_KEY not configured" }
   }
+
+  await incrementUsage(userId, "resumes")
 
   try {
     const model = getGroqModel()
@@ -85,8 +91,10 @@ Education:
 
     return { resume: resumeText }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    await decrementUsage(userId, "resumes")
+    const msg = error instanceof Error ? error.message : "Failed to generate resume"
     console.error("Resume Generation Error:", error)
-    return { error: error.message || "Failed to generate resume" }
+    return { error: msg }
   }
 }

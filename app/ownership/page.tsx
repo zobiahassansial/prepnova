@@ -38,7 +38,7 @@ export default function OwnershipPage() {
                         <section className="space-y-3">
                             <h2 className="text-xl font-semibold text-foreground">2. Owner &amp; Operator</h2>
                             <p className="text-muted-foreground leading-relaxed">
-                                PrepNova is independently owned, developed, and operated. All decisions regarding the platform's features, pricing, policies, and direction are made by the founding team.
+                                PrepNova is independently owned, developed, and operated. All decisions regarding the platform&apos;s features, pricing, policies, and direction are made by the founding team.
                             </p>
                             <p className="text-muted-foreground leading-relaxed">
                                 For official correspondence, legal notices, or business inquiries, please contact us at:
@@ -75,7 +75,7 @@ export default function OwnershipPage() {
                                 <li><span className="text-foreground font-medium">Vercel</span> — hosting and deployment infrastructure.</li>
                             </ul>
                             <p className="text-muted-foreground leading-relaxed">
-                                PrepNova's use of these services does not imply endorsement, sponsorship, or affiliation with their owners.
+                                PrepNova&apos;s use of these services does not imply endorsement, sponsorship, or affiliation with their owners.
                             </p>
                         </section>
 

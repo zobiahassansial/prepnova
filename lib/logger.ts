@@ -3,7 +3,7 @@ import { addDoc, collection, Timestamp } from "firebase/firestore"
 
 export type ActivityType = "study_session" | "task_complete" | "deck_created" | "deck_reviewed" | "resume_created" | "resume_saved" | "summary_generated" | "doc_scanned" | "task_created" | "interview_practice"
 
-export async function logActivity(userId: string, type: ActivityType, description: string, extraData: Record<string, any> = {}) {
+export async function logActivity(userId: string, type: ActivityType, description: string, extraData: Record<string, unknown> = {}) {
     if (!userId) return
 
     try {

@@ -554,7 +554,6 @@ export function StudyPlanner() {
                         schedule.length > 0 ? (
                             <StudyCalendar
                                 events={calendarEvents as any}
-                                // @ts-ignore
                                 onEventDrop={handleEventDrop}
                                 onSelectEvent={handleSelectEvent}
                                 onSelectSlot={handleSelectSlot}
@@ -946,20 +945,24 @@ export function StudyPlanner() {
     )
 }
 
-const TimerDialog = memo(({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) => {
+const TimerDialog = memo(function TimerDialogComponent({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) {
     const [timeLeft, setTimeLeft] = useState(25 * 60)
     const [isRunning, setIsRunning] = useState(false)
 
     useEffect(() => {
-        let timer: any
-        if (isRunning && timeLeft > 0) {
-            timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000)
-        } else if (timeLeft === 0) {
-            setIsRunning(false)
-            if (isRunning) toast.success("Timer completed! Take a break.")
-        }
+        if (!isRunning) return
+        const timer = setInterval(() => {
+            setTimeLeft(prev => {
+                if (prev <= 1) {
+                    setIsRunning(false)
+                    toast.success("Timer completed! Take a break.")
+                    return 0
+                }
+                return prev - 1
+            })
+        }, 1000)
         return () => clearInterval(timer)
-    }, [isRunning, timeLeft])
+    }, [isRunning])
 
     const formatTime = (seconds: number) => {
         const m = Math.floor(seconds / 60)

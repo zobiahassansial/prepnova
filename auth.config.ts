@@ -9,14 +9,18 @@ export const authConfig = {
             return true
         },
         async jwt({ token, user }) {
-            console.log("[Auth] JWT Callback", { token: token?.sub, user: user?.id });
+            if (process.env.NODE_ENV === 'development') {
+                console.log("[Auth] JWT Callback", { token: token?.sub, user: user?.id });
+            }
             if (user) {
                 token.id = user.id;
             }
             return token;
         },
         async session({ session, token }) {
-            console.log("[Auth] Session Callback", { sessionUser: session?.user?.email, tokenId: token?.id });
+            if (process.env.NODE_ENV === 'development') {
+                console.log("[Auth] Session Callback", { sessionUser: session?.user?.email, tokenId: token?.id });
+            }
             if (session.user) {
                 session.user.id = token.id as string;
             }

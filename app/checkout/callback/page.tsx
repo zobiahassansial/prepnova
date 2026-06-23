@@ -9,27 +9,29 @@ function CallbackContent() {
     const router = useRouter()
 
     useEffect(() => {
-        const orderId = searchParams.get("order_id") || ""
-        const cancelled = searchParams.get("status") === "cancel"
-        // SafePay sometimes appends its own token param — pass it along for verification
-        const token = searchParams.get("token") || searchParams.get("beacon") || ""
+        const orderId   = searchParams.get("order_id") || ""
+        const cancelled = searchParams.get("status")   === "cancel"
+        // SafePay appends its own beacon/token and, for signed redirects, sig+tracker
+        const token  = searchParams.get("token")   || searchParams.get("beacon")  || ""
+        const sig    = searchParams.get("sig")      || ""
+        const trackerFromSafepay = searchParams.get("tracker") || token
 
-        const payload = { type: "SAFEPAY_CALLBACK", success: !cancelled, orderId, token }
-        const origin = window.location.origin
+        const payload = { type: "SAFEPAY_CALLBACK", success: !cancelled, orderId, token, sig, tracker: trackerFromSafepay }
+        const origin  = window.location.origin
 
         if (window.opener && !window.opener.closed) {
-            // Opened as a popup — notify parent tab and close
             window.opener.postMessage(payload, origin)
             window.close()
         } else if (window.parent !== window) {
-            // Inside an iframe — notify parent frame
             window.parent.postMessage(payload, origin)
         } else {
-            // Direct navigation — redirect normally
             if (cancelled) {
                 router.replace(`/checkout/cancel?order_id=${encodeURIComponent(orderId)}`)
             } else {
-                router.replace(`/checkout/success?order_id=${encodeURIComponent(orderId)}&token=${encodeURIComponent(token)}`)
+                const qs = new URLSearchParams({ order_id: orderId, token })
+                if (sig)              qs.set("sig",     sig)
+                if (trackerFromSafepay) qs.set("tracker", trackerFromSafepay)
+                router.replace(`/checkout/success?${qs.toString()}`)
             }
         }
     }, [searchParams, router])

@@ -6,12 +6,12 @@ import { ResumeForm } from "./resume-form"
 import { ResumePreview } from "./resume-preview"
 import { ResumeData, defaultSections } from "@/types/resume"
 import { Button } from "@/components/ui/button"
-import { addDoc, collection, doc, getDoc, setDoc, Timestamp } from "firebase/firestore"
+import { doc, getDoc, setDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { toast } from "sonner"
 import { Eye, FileText, Loader2, Save, Sparkles } from "lucide-react"
 
-import { checkClientQuota, incrementClientUsage } from "@/lib/usage-client"
+import { saveResume } from "@/actions/save-resume"
 import { UpgradeModal } from "@/components/pricing/upgrade-modal"
 import { logActivity } from "@/lib/logger"
 
@@ -288,32 +288,26 @@ export function ResumeBuilder() {
         if (!user) return
         setLoading(true)
 
-        // 1. Check Quota
-        const allowed = await checkClientQuota(user.uid, "resumes").then(r => r.allowed)
-        if (!allowed) {
-            setLoading(false)
-            setShowUpgrade(true)
-            return
-        }
-
         try {
-            // Save to users/{uid}/resumes subcollection (dashboard onSnapshot reads this)
-            await addDoc(collection(db, "users", user.uid, "resumes"), {
-                ...resumeData,
-                userId: user.uid,
-                updatedAt: Timestamp.now(),
-                createdAt: Timestamp.now()
-            })
+            // Server action enforces quota atomically via Firestore transaction.
+            // The client-side checkClientQuota call has been removed — it was
+            // bypassable by writing directly to Firestore from the browser.
+            const result = await saveResume(resumeData)
 
-            // 2. Increment Quota
-            await incrementClientUsage(user.uid, "resumes")
+            if (!result.success) {
+                if (result.error?.includes("used") && result.error?.includes("resumes")) {
+                    setShowUpgrade(true)
+                } else {
+                    toast.error(result.error || "Failed to save resume.")
+                }
+                return
+            }
 
-            // 3. Log Activity
             await logActivity(user.uid, "resume_created", `Saved resume: "${resumeData.title}"`)
-
             toast.success("Resume saved successfully!")
-        } catch (error: any) {
-            toast.error("Failed to save resume: " + (error.message || "Unknown error"))
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : "Unknown error"
+            toast.error("Failed to save resume: " + msg)
         } finally {
             setLoading(false)
         }

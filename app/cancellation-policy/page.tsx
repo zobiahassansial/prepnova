@@ -102,7 +102,7 @@ export default function CancellationPolicyPage() {
                         <section className="space-y-3">
                             <h2 className="text-xl font-semibold text-foreground">6. Payment Processor</h2>
                             <p className="text-muted-foreground leading-relaxed">
-                                Payments on PrepNova are processed securely via <span className="text-foreground font-medium">Safepay</span>. PrepNova does not store your card details. Refunds are returned to the original payment method on file with Safepay. Processing times are subject to Safepay's and your bank's policies.
+                                Payments on PrepNova are processed securely via <span className="text-foreground font-medium">Safepay</span>. PrepNova does not store your card details. Refunds are returned to the original payment method on file with Safepay. Processing times are subject to Safepay&apos;s and your bank&apos;s policies.
                             </p>
                         </section>
 

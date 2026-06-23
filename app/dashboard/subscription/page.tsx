@@ -7,13 +7,14 @@ import { Check, CheckCircle2, Zap, Loader2 } from "lucide-react"
 import { useUserPlan } from "@/hooks/useUserPlan"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { PLAN_PRICES, formatPKR } from "@/lib/safepay"
 
 const PLANS = [
     {
         key: "free",
         label: "Free",
         desc: "Essential basics",
-        monthly: null as number | null,
+        monthlyPKR: null as number | null,
         features: [
             "1 Resume Generation / month",
             "3 AI Summaries / month",
@@ -29,7 +30,7 @@ const PLANS = [
         key: "standard",
         label: "Standard",
         desc: "For serious students",
-        monthly: 5.99,
+        monthlyPKR: PLAN_PRICES.standard.monthlyPKR,
         features: [
             "5 Resume Generations / month",
             "20 AI Summaries / month",
@@ -47,7 +48,7 @@ const PLANS = [
         key: "pro",
         label: "Pro",
         desc: "Maximum potential",
-        monthly: 11.99,
+        monthlyPKR: PLAN_PRICES.pro.monthlyPKR,
         features: [
             "15 Resume Generations / month",
             "50 AI Summaries / month",
@@ -65,7 +66,7 @@ const PLANS = [
         key: "max",
         label: "Max",
         desc: "Unlimited power",
-        monthly: 19.99,
+        monthlyPKR: PLAN_PRICES.max.monthlyPKR,
         features: [
             "30 Resume Generations / month",
             "120 AI Summaries / month",
@@ -147,7 +148,7 @@ export default function SubscriptionPage() {
                                 <CardDescription>{p.desc}</CardDescription>
                                 <div className="mt-4">
                                     <span className="text-3xl font-bold">
-                                        {p.monthly != null ? `$${p.monthly}` : "$0"}
+                                        {p.monthlyPKR != null ? formatPKR(p.monthlyPKR) : "PKR 0"}
                                     </span>
                                     <span className="text-muted-foreground">/mo</span>
                                 </div>

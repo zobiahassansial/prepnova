@@ -43,7 +43,7 @@ export default function PrivacyPolicyPage() {
                         <section className="space-y-3">
                             <h2 className="text-xl font-semibold text-foreground">2. How We Use Your Information</h2>
                             <ul className="space-y-2 text-muted-foreground list-disc pl-5">
-                                <li>To provide, maintain, and improve PrepNova's features.</li>
+                                <li>To provide, maintain, and improve PrepNova&apos;s features.</li>
                                 <li>To personalise your experience and remember your preferences.</li>
                                 <li>To enforce plan limits and prevent API abuse.</li>
                                 <li>To send account-related emails (e.g. password reset, billing receipts).</li>
@@ -108,7 +108,7 @@ export default function PrivacyPolicyPage() {
                         <div className="border-t border-border/60" />
 
                         <section className="space-y-3">
-                            <h2 className="text-xl font-semibold text-foreground">7. Children's Privacy</h2>
+                            <h2 className="text-xl font-semibold text-foreground">7. Children&apos;s Privacy</h2>
                             <p className="text-muted-foreground leading-relaxed">
                                 PrepNova is not directed at children under 13. We do not knowingly collect personal data from children. If you believe a child has created an account, please contact us immediately at <a href="mailto:support@prepnova.online" className="text-primary hover:underline">support@prepnova.online</a>.
                             </p>

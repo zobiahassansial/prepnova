@@ -2,18 +2,19 @@
 
 import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
+import { checkLimit, incrementUsage, decrementUsage } from "@/lib/limits"
 import { ResumeData } from "@/types/resume"
 
 export async function generateResumeContent(currentData: ResumeData, tone?: string, jobDescription?: string): Promise<Partial<ResumeData>> {
     const session = await auth()
     if (!session?.user?.id) throw new Error("Authentication required.")
+    const userId = session.user.id
+
+    const quota = await checkLimit(userId, "resumes")
+    if (!quota.allowed) throw new Error(quota.error ?? "Resume limit reached.")
+    await incrementUsage(userId, "resumes")
 
     const model = getGroqModel()
-
-    const hasExperience = currentData.experience.length > 0
-    const hasEducation = currentData.education.length > 0
-    const hasSkills = currentData.skills.length > 0
-    const hasSummary = currentData.summary?.trim().length > 0
 
     const prompt = `You are an elite professional resume writer with 20+ years of experience helping candidates land jobs at top companies. Your task is to generate a COMPLETE, RICH, PROFESSIONAL resume based on whatever information the user has provided — even if it is minimal or sparse.
 
@@ -96,8 +97,8 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
             ],
             temperature: 0.7,
             max_tokens: 4000,
-        });
-        const text = result.choices[0]?.message?.content || "";
+        })
+        const text = result.choices[0]?.message?.content || ""
 
         const jsonStr = text
             .replace(/^```json\s*/i, "")
@@ -105,30 +106,31 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
             .replace(/\s*```$/i, "")
             .trim()
 
-        const data = JSON.parse(jsonStr)
+        const data = JSON.parse(jsonStr) as Record<string, unknown>
 
-        // Merge IDs back from original data to avoid ID mismatches
-        if (data.experience && currentData.experience.length > 0) {
-            data.experience = data.experience.map((exp: any, i: number) => ({
+        type ExpEntry = { id?: string; [k: string]: unknown }
+        if (Array.isArray(data.experience) && currentData.experience.length > 0) {
+            data.experience = (data.experience as ExpEntry[]).map((exp, i) => ({
                 ...exp,
                 id: currentData.experience[i]?.id || exp.id || Date.now().toString() + i,
             }))
         }
-        if (data.education && currentData.education.length > 0) {
-            data.education = data.education.map((edu: any, i: number) => ({
+        if (Array.isArray(data.education) && currentData.education.length > 0) {
+            data.education = (data.education as ExpEntry[]).map((edu, i) => ({
                 ...edu,
                 id: currentData.education[i]?.id || edu.id || Date.now().toString() + i,
             }))
         }
-        if (data.projects && currentData.projects.length > 0) {
-            data.projects = data.projects.map((proj: any, i: number) => ({
+        if (Array.isArray(data.projects) && currentData.projects.length > 0) {
+            data.projects = (data.projects as ExpEntry[]).map((proj, i) => ({
                 ...proj,
                 id: currentData.projects[i]?.id || proj.id || Date.now().toString() + i,
             }))
         }
 
-        return data
+        return data as Partial<ResumeData>
     } catch (error) {
+        await decrementUsage(userId, "resumes")
         console.error("AI Resume Generation Failed:", error)
         throw new Error("Failed to generate resume content")
     }

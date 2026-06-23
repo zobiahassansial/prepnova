@@ -143,7 +143,7 @@ export function NoteSummarizer() {
                     outputType, tone, length
                 })
 
-                if (!result.success || result.error) {
+                if (!result.success) {
                     toast.error(result.error || "Failed to process note")
                     setIsUploading(false)
                     return

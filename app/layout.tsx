@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Outfit } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -14,11 +15,15 @@ export const metadata: Metadata = {
   description: "Summarize lecture notes, build ATS-friendly resumes, practise mock interviews, and plan your study schedule — all in one place.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The nonce is injected by middleware so Next.js can attach it to any
+  // inline scripts it generates (hydration, router prefetch, etc.).
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={outfit.className}>
@@ -27,6 +32,7 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
+          nonce={nonce}
         >
           <NextAuthProvider>
             <AuthProvider>

@@ -101,8 +101,8 @@ export default function StudyModePage() {
 
         const fetchTask = async () => {
             try {
-                let ref = doc(db, "study_tasks", taskId)
-                let snap = await getDoc(ref)
+                const ref = doc(db, "study_tasks", taskId)
+                const snap = await getDoc(ref)
 
                 if (snap.exists()) {
                     const data = snap.data()

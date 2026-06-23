@@ -29,7 +29,7 @@ export default function TermsOfServicePage() {
                         <section className="space-y-3">
                             <h2 className="text-xl font-semibold text-foreground">1. Acceptance of Terms</h2>
                             <p className="text-muted-foreground leading-relaxed">
-                                By accessing or using PrepNova ("the Service"), you agree to these Terms of Service and our Privacy Policy. If you do not agree, do not use the Service. We may update these Terms at any time; continued use after changes constitutes acceptance.
+                                By accessing or using PrepNova (&quot;the Service&quot;), you agree to these Terms of Service and our Privacy Policy. If you do not agree, do not use the Service. We may update these Terms at any time; continued use after changes constitutes acceptance.
                             </p>
                         </section>
 
@@ -74,13 +74,13 @@ export default function TermsOfServicePage() {
                         <section className="space-y-3">
                             <h2 className="text-xl font-semibold text-foreground">5. Subscription Plans & Billing</h2>
                             <p className="text-muted-foreground leading-relaxed">
-                                PrepNova offers Free, Standard ($5.99/mo), Pro ($11.99/mo), and Max ($19.99/mo) plans. Yearly plans are billed annually at a discounted rate.
+                                PrepNova offers Free, Standard (PKR 1,680/mo), Pro (PKR 3,360/mo), and Max (PKR 5,600/mo) plans. Yearly plans are billed annually at a discounted rate.
                             </p>
                             <ul className="space-y-2 text-muted-foreground list-disc pl-5">
                                 <li>All fees are charged in USD and are non-refundable except as required by law or at our sole discretion.</li>
                                 <li>Subscriptions renew automatically at the end of each billing period unless cancelled beforehand.</li>
                                 <li>You may cancel at any time; access continues until the end of the current billing period.</li>
-                                <li>We reserve the right to change pricing with 30 days' notice. Changes do not apply to the current billing period.</li>
+                                <li>We reserve the right to change pricing with 30 days&apos; notice. Changes do not apply to the current billing period.</li>
                                 <li>Plan limits (resumes, summaries, flashcards, etc.) reset at the start of each calendar month.</li>
                             </ul>
                         </section>
@@ -93,7 +93,7 @@ export default function TermsOfServicePage() {
                                 <span className="text-foreground font-medium">Your content:</span> You retain ownership of the content you create on PrepNova (resumes, notes, flashcards). By uploading content, you grant PrepNova a limited, non-exclusive licence to store and process it solely to provide the Service.
                             </p>
                             <p className="text-muted-foreground leading-relaxed">
-                                <span className="text-foreground font-medium">Our content:</span> PrepNova's branding, UI, code, and AI-generated templates are owned by PrepNova or its licensors. You may not copy, reproduce, or distribute them without permission.
+                                <span className="text-foreground font-medium">Our content:</span> PrepNova&apos;s branding, UI, code, and AI-generated templates are owned by PrepNova or its licensors. You may not copy, reproduce, or distribute them without permission.
                             </p>
                         </section>
 

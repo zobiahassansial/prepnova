@@ -14,20 +14,21 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
+import { PLAN_PRICES, formatPKR } from "@/lib/safepay"
 
 const PLAN_INFO: Record<string, {
     label: string; monthly: number; yearly: number; yearlySaving: number; features: string[]; color: string
 }> = {
     standard: {
-        label: "Standard", monthly: 5.99, yearly: 59.99, yearlySaving: 12, color: "text-blue-600",
+        label: "Standard", monthly: PLAN_PRICES.standard.monthlyPKR, yearly: PLAN_PRICES.standard.yearlyPKR, yearlySaving: 3360, color: "text-blue-600",
         features: ["5 Resume Generations / month", "20 AI Summaries / month", "15 Flashcard Decks / month", "Full Study Planner", "Document Scanner (20 pages)", "5 AI Mock Interviews / month"],
     },
     pro: {
-        label: "Pro", monthly: 11.99, yearly: 119.99, yearlySaving: 24, color: "text-primary",
+        label: "Pro", monthly: PLAN_PRICES.pro.monthlyPKR, yearly: PLAN_PRICES.pro.yearlyPKR, yearlySaving: 6720, color: "text-primary",
         features: ["15 Resume Generations / month", "50 AI Summaries / month", "40 Flashcard Decks / month", "Full Study Planner", "Document Scanner (100 pages)", "10 AI Mock Interviews + live support"],
     },
     max: {
-        label: "Max", monthly: 19.99, yearly: 199.99, yearlySaving: 40, color: "text-yellow-600",
+        label: "Max", monthly: PLAN_PRICES.max.monthlyPKR, yearly: PLAN_PRICES.max.yearlyPKR, yearlySaving: 11200, color: "text-yellow-600",
         features: ["30 Resume Generations / month", "120 AI Summaries / month", "100 Flashcard Decks / month", "Full Study Planner", "Document Scanner (300 pages)", "20 AI Mock Interviews + Priority Support"],
     },
 }
@@ -93,7 +94,13 @@ function CheckoutContent() {
             if (event.data?.type !== "SAFEPAY_CALLBACK") return
             closePending()
             if (event.data.success) {
-                router.push(`/checkout/success?order_id=${encodeURIComponent(event.data.orderId)}&token=${encodeURIComponent(trackerTokenRef.current)}`)
+                const token   = event.data.token   || trackerTokenRef.current
+                const sig     = event.data.sig     || ""
+                const tracker = event.data.tracker || token
+                const qs = new URLSearchParams({ order_id: event.data.orderId || orderIdRef.current, token })
+                if (sig)     qs.set("sig",     sig)
+                if (tracker) qs.set("tracker", tracker)
+                router.push(`/checkout/success?${qs.toString()}`)
             } else {
                 toast.error("Payment was cancelled. You have not been charged.")
             }
@@ -170,18 +177,13 @@ function CheckoutContent() {
                 { paid: boolean; plan?: string; billing?: string; state?: string }
             >(functions, "verifyPayment")
 
-            const result = await verifyPayment({
+            await verifyPayment({
                 orderId:      orderIdRef.current,
                 trackerToken: trackerTokenRef.current,
             })
-            if (result.data.paid) {
-                router.push(`/checkout/success?order_id=${encodeURIComponent(orderIdRef.current)}&token=${encodeURIComponent(trackerTokenRef.current)}`)
-            } else {
-                toast.error("Payment not confirmed. If you completed payment, please wait a few minutes and check your dashboard.")
-                setPopupClosedWithoutResult(false)
-            }
+            router.push(`/checkout/success?order_id=${encodeURIComponent(orderIdRef.current)}&token=${encodeURIComponent(trackerTokenRef.current)}`)
         } catch {
-            toast.error("Could not verify payment. Please check your dashboard.")
+            router.push(`/checkout/success?order_id=${encodeURIComponent(orderIdRef.current)}&token=${encodeURIComponent(trackerTokenRef.current)}`)
         } finally {
             setVerifying(false)
         }
@@ -205,7 +207,7 @@ function CheckoutContent() {
     }
 
     const price = billing === "yearly" ? info.yearly : info.monthly
-    const monthlyEquiv = billing === "yearly" ? (info.yearly / 12).toFixed(2) : info.monthly.toFixed(2)
+    const monthlyEquiv = billing === "yearly" ? Math.round(info.yearly / 12) : info.monthly
 
     return (
         <>
@@ -299,7 +301,7 @@ function CheckoutContent() {
                                 >
                                     Yearly
                                     <span className={cn("text-xs rounded-full px-2 py-0.5 font-semibold", billing === "yearly" ? "bg-white/20 text-white" : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400")}>
-                                        Save ${info.yearlySaving}
+                                        Save {formatPKR(info.yearlySaving)}
                                     </span>
                                 </button>
                             </div>
@@ -307,12 +309,12 @@ function CheckoutContent() {
                             {/* Price */}
                             <div className="p-4 rounded-xl bg-muted/40 border space-y-1">
                                 <div className="flex items-end gap-2">
-                                    <span className="text-3xl font-bold">${price.toFixed(2)}</span>
+                                    <span className="text-3xl font-bold">{formatPKR(price)}</span>
                                     <span className="text-muted-foreground pb-1">{billing === "yearly" ? "/ year" : "/ month"}</span>
                                 </div>
                                 {billing === "yearly" && (
                                     <p className="text-sm text-green-600 dark:text-green-400">
-                                        That's ${monthlyEquiv}/mo — save ${info.yearlySaving} compared to monthly
+                                        That&apos;s {formatPKR(monthlyEquiv)}/mo. Save {formatPKR(info.yearlySaving)} compared to monthly
                                     </p>
                                 )}
                             </div>

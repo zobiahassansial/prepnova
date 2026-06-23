@@ -2,49 +2,92 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Username lookup (minimal public collection) ─────────────────────────────
+    // Only stores { uid: "..." } — no personal data.
+    // Public reads allow pre-auth username availability checks.
+    // Writes are server-only (Admin SDK); clients never write here directly.
+    match /usernames/{username} {
+      allow read:  if true;
+      allow write: if false;
+    }
+
     // ── User profiles ──────────────────────────────────────────────────────────
     match /users/{userId} {
-      // list: unauthenticated read needed for username-based login lookup
-      // (query: where("username", "==", value) before the user is signed in)
-      allow list: if true;
-      allow get:  if true;
-
-      // Only the owner may create / update / delete their profile document
+      // Reading a user profile requires being that user.
+      // NOTE: If username-based login currently queries this collection directly
+      //       before the user is signed in, migrate that lookup to the `usernames`
+      //       collection (see above) or a server-side API route.
+      allow get:    if request.auth != null && request.auth.uid == userId;
+      allow list:   if false;  // Never allow enumeration of all users
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && request.auth.uid == userId;
       allow delete: if request.auth != null && request.auth.uid == userId;
 
-      // ── All user subcollections (subscription, billing, tasks, resumes,
-      //    flashcardDecks, summaries, activityLog, studySessions, settings …)
-      //    are private: only the owner can read or write them.
+      // ── Protected subcollections — server-only writes ─────────────────────
+      // These are written exclusively via Firebase Admin SDK (server actions /
+      // Cloud Functions). Client writes are denied to prevent quota/plan bypass.
+
+      match /usage/{docId} {
+        allow read:  if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+
+      match /subscription/{docId} {
+        allow read:  if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+
+      match /billing/{docId} {
+        allow read:  if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+
+      match /admin/{docId} {
+        allow read:  if false;
+        allow write: if false;
+      }
+
+      // Resumes are written through the saveResume server action (which enforces
+      // quota via a Firestore transaction). Reads and updates remain owner-only.
+      match /resumes/{docId} {
+        allow read:   if request.auth != null && request.auth.uid == userId;
+        allow create: if false;
+        allow update: if request.auth != null && request.auth.uid == userId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // ── All other user subcollections (settings, activityLog, etc.) ────────
       match /{subcollection}/{docId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
 
-    // ── Study planner — top-level collections keyed by userId field ────────────
-    match /study_tasks/{taskId} {
+    // ── Flashcard decks (top-level collection) ──────────────────────────────────
+    // Creates go through the saveDeck server action (quota enforced).
+    // Updates/deletes (mastery tracking, card edits) remain allowed from the client.
+    match /decks/{deckId} {
       allow read:          if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create:        if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow create:        if false;  // server action only (saveDeck)
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // ── Study planner — top-level collections keyed by userId field ─────────────
+    match /study_tasks/{taskId} {
+      allow read:           if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create:         if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
     match /study_schedule/{scheduleId} {
-      allow read:          if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create:        if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read:           if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create:         if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
-    // ── Legacy component collections keyed by userId field ────────────────────
+    // ── Legacy component collections keyed by userId field ─────────────────────
     match /notes/{noteId} {
-      allow read:          if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create:        if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
-    match /decks/{deckId} {
-      allow read:          if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create:        if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read:           if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create:         if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
   }

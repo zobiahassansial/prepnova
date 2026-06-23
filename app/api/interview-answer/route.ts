@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 2. Rate limit ─────────────────────────────────────────────────────────
-    const rate = checkRateLimit(userId)
+    const rate = await checkRateLimit(userId)
     if (!rate.allowed) {
         return new Response(
             JSON.stringify({ error: `Too many requests. Wait ${rate.retryAfter}s.` }),

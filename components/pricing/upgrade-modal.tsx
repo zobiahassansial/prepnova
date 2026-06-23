@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Crown, X, CheckCircle2, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { PLAN_PRICES, formatPKR } from "@/lib/safepay"
 
 interface UpgradeModalProps {
     feature: string
@@ -20,9 +21,9 @@ const planFeatures: Record<string, string[]> = {
 }
 
 const planPrices: Record<string, string> = {
-    standard: "$5.99/mo",
-    pro:      "$11.99/mo",
-    max:      "$19.99/mo",
+    standard: `${formatPKR(PLAN_PRICES.standard.monthlyPKR)}/mo`,
+    pro:      `${formatPKR(PLAN_PRICES.pro.monthlyPKR)}/mo`,
+    max:      `${formatPKR(PLAN_PRICES.max.monthlyPKR)}/mo`,
 }
 
 const planColors: Record<string, string> = {

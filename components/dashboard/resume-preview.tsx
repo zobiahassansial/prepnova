@@ -10,18 +10,20 @@ import { ImportedTemplateRenderer } from "./imported-template-renderer"
 
 // ─── Cover Letter Page ───────────────────────────────────────────────────────
 
+function Signoff({ fullName, color = "#222" }: { fullName: string; color?: string }) {
+    return (
+        <div style={{ marginTop: '40px' }}>
+            <p style={{ fontWeight: 600, color }}>Sincerely,</p>
+            <p style={{ marginTop: '8px', fontSize: '15px', color }}>{fullName}</p>
+        </div>
+    )
+}
+
 function CoverLetterPage({ data }: { data: ResumeData }) {
     const p = data.personalInfo
     const contact = [p.email, p.phone, p.location].filter(Boolean).join('  •  ')
     const body = data.coverLetter || ""
     const t = data.coverTemplate || "basic"
-
-    const Signoff = ({ color = "#222" }: { color?: string }) => (
-        <div style={{ marginTop: '40px' }}>
-            <p style={{ fontWeight: 600, color }}>Sincerely,</p>
-            <p style={{ marginTop: '8px', fontSize: '15px', color }}>{p.fullName}</p>
-        </div>
-    )
 
     if (t === "classic") return (
         <div style={{ fontFamily: 'Georgia, serif', padding: '52px', color: '#222', fontSize: '13px', lineHeight: '1.7' }}>
@@ -31,7 +33,7 @@ function CoverLetterPage({ data }: { data: ResumeData }) {
             </div>
             <hr style={{ border: 'none', borderTop: '2px solid #222', marginBottom: '32px' }} />
             <div style={{ flex: 1, whiteSpace: 'pre-wrap' }}>{body}</div>
-            <Signoff />
+            <Signoff fullName={p.fullName} />
         </div>
     )
 
@@ -42,7 +44,7 @@ function CoverLetterPage({ data }: { data: ResumeData }) {
                 <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#1a2744', margin: 0 }}>{p.fullName}</h1>
                 <p style={{ color: '#4a6fa5', fontSize: '12px', marginTop: '6px', marginBottom: '32px' }}>{contact}</p>
                 <div style={{ borderLeft: '3px solid #1a2744', paddingLeft: '16px', whiteSpace: 'pre-wrap', color: '#444' }}>{body}</div>
-                <Signoff color="#1a2744" />
+                <Signoff fullName={p.fullName} color="#1a2744" />
             </div>
         </div>
     )

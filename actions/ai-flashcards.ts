@@ -2,11 +2,18 @@
 
 import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
+import { checkLimit, incrementUsage, decrementUsage } from "@/lib/limits"
 
 export async function generateFlashcardsFromText(text: string) {
     const session = await auth()
     if (!session?.user?.id) {
         return { error: "Authentication required." }
+    }
+    const userId = session.user.id
+
+    const quota = await checkLimit(userId, "flashcards")
+    if (!quota.allowed) {
+        return { error: quota.error, upgradeRequired: true }
     }
 
     if (!process.env.GROQ_API_KEY) {
@@ -16,6 +23,8 @@ export async function generateFlashcardsFromText(text: string) {
     if (!text || text.trim().length < 50) {
         return { error: "Not enough text content to generate flashcards. Please provide more detailed notes." }
     }
+
+    await incrementUsage(userId, "flashcards")
 
     try {
         const model = getGroqModel()
@@ -62,27 +71,31 @@ ${truncatedText}`
         const content = result.choices[0]?.message?.content
         if (!content) return { error: "No response from AI. Please try again." }
 
-        let parsed: any
+        let parsed: { flashcards?: unknown[] }
         try {
             parsed = JSON.parse(content)
         } catch {
+            await decrementUsage(userId, "flashcards")
             return { error: "AI returned an unexpected format. Please try again." }
         }
 
         if (!Array.isArray(parsed?.flashcards)) {
+            await decrementUsage(userId, "flashcards")
             return { error: "AI returned an unexpected format. Please try again." }
         }
 
         // Validate and clean each card — drop any with empty front or back
-        const flashcards: { front: string; back: string }[] = parsed.flashcards
-            .filter((card: any) =>
-                card &&
-                typeof card.front === "string" && card.front.trim().length > 0 &&
-                typeof card.back === "string" && card.back.trim().length > 0
+        const flashcards: { front: string; back: string }[] = (parsed.flashcards as unknown[])
+            .filter((card): card is { front: string; back: string } =>
+                card != null &&
+                typeof (card as Record<string, unknown>).front === "string" &&
+                ((card as Record<string, unknown>).front as string).trim().length > 0 &&
+                typeof (card as Record<string, unknown>).back === "string" &&
+                ((card as Record<string, unknown>).back as string).trim().length > 0
             )
-            .map((card: any) => ({
-                front: card.front.trim(),
-                back: card.back.trim(),
+            .map((card) => ({
+                front: (card.front as string).trim(),
+                back: (card.back as string).trim(),
             }))
 
         if (flashcards.length === 0) {
@@ -91,8 +104,10 @@ ${truncatedText}`
 
         return { flashcards }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        await decrementUsage(userId, "flashcards")
+        const msg = error instanceof Error ? error.message : "Failed to generate flashcards. Please try again."
         console.error("Flashcard Generation Error:", error)
-        return { error: error.message || "Failed to generate flashcards. Please try again." }
+        return { error: msg }
     }
 }

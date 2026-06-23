@@ -2,12 +2,18 @@
 
 import { auth } from "@/auth"
 import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
+import { checkLimit, incrementUsage, decrementUsage } from "@/lib/limits"
 
 export async function getLiveInterviewHelp(transcript: string) {
     const session = await auth()
     if (!session?.user?.id) return { error: "Authentication required." }
 
+    const quota = await checkLimit(session.user.id, "interviews")
+    if (!quota.allowed) return { error: quota.error, upgradeRequired: true }
+
     if (!transcript?.trim()) return { error: "No text detected" }
+
+    await incrementUsage(session.user.id, "interviews")
     try {
         const model = getGroqModel()
         const result = await model.chat.completions.create({
@@ -25,6 +31,7 @@ Give a concise, confident, professional answer the candidate can speak immediate
         })
         return { success: true, answer: result.choices[0]?.message?.content || "" }
     } catch {
+        await decrementUsage(session.user.id, "interviews")
         return { error: "Failed to generate answer" }
     }
 }
@@ -35,6 +42,9 @@ export async function generateInterviewResponse(
 ) {
     const session = await auth()
     if (!session?.user?.id) return { error: "Authentication required." }
+
+    const quota = await checkLimit(session.user.id, "interviews")
+    if (!quota.allowed) return { error: quota.error, upgradeRequired: true }
 
     try {
         const model = getGroqModel()
@@ -72,8 +82,9 @@ Current turn: ${turnCount + 1}/7`
             ]
         })
 
+        await incrementUsage(session.user.id, "interviews")
         return { reply: result.choices[0]?.message?.content || "", turnCount }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Interview Error:", error)
         return { error: "Failed to generate interview response." }
     }
@@ -85,6 +96,9 @@ export async function generateInterviewFeedback(
 ) {
     const session = await auth()
     if (!session?.user?.id) return { error: "Authentication required." }
+
+    // Feedback is part of the same interview session — no additional quota consumed.
+    // Auth check is sufficient here.
 
     try {
         const model = getGroqModel()
@@ -117,9 +131,9 @@ Return a JSON object with this exact structure:
             response_format: { type: "json_object" }
         })
 
-        const feedback = JSON.parse(result.choices[0]?.message?.content || "{}")
+        const feedback = JSON.parse(result.choices[0]?.message?.content || "{}") as Record<string, unknown>
         return { feedback }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Feedback Error:", error)
         return { error: "Failed to generate feedback" }
     }

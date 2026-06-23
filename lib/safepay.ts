@@ -8,15 +8,17 @@ export const SAFEPAY_BASE =
         : "https://sandbox.api.getsafepay.com"
 
 export const PLAN_PRICES: Record<string, {
-    monthly: number
-    yearly: number
     monthlyPKR: number
     yearlyPKR: number
     label: string
 }> = {
-    standard: { monthly: 5.99,  yearly: 59.99,  monthlyPKR: 1680,  yearlyPKR: 16800,  label: "Standard Plan" },
-    pro:      { monthly: 11.99, yearly: 119.99, monthlyPKR: 3360,  yearlyPKR: 33600,  label: "Pro Plan"      },
-    max:      { monthly: 19.99, yearly: 199.99, monthlyPKR: 5600,  yearlyPKR: 56000,  label: "Max Plan"      },
+    standard: { monthlyPKR: 1680,  yearlyPKR: 16800,  label: "Standard Plan" },
+    pro:      { monthlyPKR: 3360,  yearlyPKR: 33600,  label: "Pro Plan"      },
+    max:      { monthlyPKR: 5600,  yearlyPKR: 56000,  label: "Max Plan"      },
+}
+
+export function formatPKR(amount: number): string {
+    return `PKR ${amount.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`
 }
 
 export const PAYMENT_METHODS = {

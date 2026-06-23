@@ -29,7 +29,7 @@ export default function CookiePolicyPage() {
                         <section className="space-y-3">
                             <h2 className="text-xl font-semibold text-foreground">1. What Are Cookies?</h2>
                             <p className="text-muted-foreground leading-relaxed">
-                                Cookies are small text files stored on your device by your browser when you visit a website. They allow the site to remember information about your visit — such as your login session or theme preference — so you don't have to re-enter it each time.
+                                Cookies are small text files stored on your device by your browser when you visit a website. They allow the site to remember information about your visit — such as your login session or theme preference — so you don&apos;t have to re-enter it each time.
                             </p>
                             <p className="text-muted-foreground leading-relaxed">
                                 Similar technologies include <span className="text-foreground font-medium">localStorage</span> and <span className="text-foreground font-medium">sessionStorage</span>, which store data directly in your browser. PrepNova uses both cookies and browser storage.
@@ -125,7 +125,7 @@ export default function CookiePolicyPage() {
                         <section className="space-y-3">
                             <h2 className="text-xl font-semibold text-foreground">6. Changes to This Policy</h2>
                             <p className="text-muted-foreground leading-relaxed">
-                                We may update this Cookie Policy as we add new features or as regulations change. The "Last updated" date at the top of this page will always reflect the most recent version.
+                                We may update this Cookie Policy as we add new features or as regulations change. The &quot;Last updated&quot; date at the top of this page will always reflect the most recent version.
                             </p>
                         </section>
 

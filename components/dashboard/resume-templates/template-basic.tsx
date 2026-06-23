@@ -1,20 +1,8 @@
 import React from 'react'
 import { ResumeData } from '@/types/resume'
 
-interface Props { data: ResumeData; scale?: number }
-
-export function TemplateBasic({ data }: Props) {
-  const d = data
-  const contact = [
-    d.personalInfo?.email,
-    d.personalInfo?.phone,
-    d.personalInfo?.location,
-    d.personalInfo?.linkedin,
-  ]
-    .filter(Boolean)
-    .join('  ·  ')
-
-  const SectionHeading = ({ children }: { children: React.ReactNode }) => (
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
     <h2
       style={{
         fontSize: '10px',
@@ -30,6 +18,20 @@ export function TemplateBasic({ data }: Props) {
       {children}
     </h2>
   )
+}
+
+interface Props { data: ResumeData; scale?: number }
+
+export function TemplateBasic({ data }: Props) {
+  const d = data
+  const contact = [
+    d.personalInfo?.email,
+    d.personalInfo?.phone,
+    d.personalInfo?.location,
+    d.personalInfo?.linkedin,
+  ]
+    .filter(Boolean)
+    .join('  ·  ')
 
   return (
     <div

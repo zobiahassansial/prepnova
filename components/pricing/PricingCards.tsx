@@ -5,13 +5,14 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, XCircle, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { PLAN_PRICES, formatPKR } from "@/lib/safepay"
 
 interface Plan {
     id: string
     name: string
-    monthly: number
-    yearly: number
-    yearlyMonthly: number // effective per-month when billed yearly
+    monthlyPKR: number
+    yearlyPKR: number
+    yearlyMonthlyPKR: number // effective per-month when billed yearly
     yearlySaving: number
     description: string
     features: { text: string; included: boolean }[]
@@ -24,9 +25,9 @@ const plans: Plan[] = [
     {
         id: "free",
         name: "Free",
-        monthly: 0,
-        yearly: 0,
-        yearlyMonthly: 0,
+        monthlyPKR: 0,
+        yearlyPKR: 0,
+        yearlyMonthlyPKR: 0,
         yearlySaving: 0,
         description: "Try the platform, no commitment needed.",
         accentClass: "border-border/60",
@@ -43,10 +44,10 @@ const plans: Plan[] = [
     {
         id: "standard",
         name: "Standard",
-        monthly: 5.99,
-        yearly: 59.99,
-        yearlyMonthly: 4.99,
-        yearlySaving: 12,
+        monthlyPKR: PLAN_PRICES.standard.monthlyPKR,
+        yearlyPKR: PLAN_PRICES.standard.yearlyPKR,
+        yearlyMonthlyPKR: Math.round(PLAN_PRICES.standard.yearlyPKR / 12),
+        yearlySaving: 3360,
         description: "Everything you need for regular coursework.",
         accentClass: "border-primary",
         cta: "Upgrade to Standard",
@@ -63,10 +64,10 @@ const plans: Plan[] = [
     {
         id: "pro",
         name: "Pro",
-        monthly: 11.99,
-        yearly: 119.99,
-        yearlyMonthly: 9.99,
-        yearlySaving: 24,
+        monthlyPKR: PLAN_PRICES.pro.monthlyPKR,
+        yearlyPKR: PLAN_PRICES.pro.yearlyPKR,
+        yearlyMonthlyPKR: Math.round(PLAN_PRICES.pro.yearlyPKR / 12),
+        yearlySaving: 6720,
         description: "For serious students and active job seekers.",
         accentClass: "border-border/60",
         cta: "Upgrade to Pro",
@@ -82,10 +83,10 @@ const plans: Plan[] = [
     {
         id: "max",
         name: "Max",
-        monthly: 19.99,
-        yearly: 199.99,
-        yearlyMonthly: 16.66,
-        yearlySaving: 40,
+        monthlyPKR: PLAN_PRICES.max.monthlyPKR,
+        yearlyPKR: PLAN_PRICES.max.yearlyPKR,
+        yearlyMonthlyPKR: Math.round(PLAN_PRICES.max.yearlyPKR / 12),
+        yearlySaving: 11200,
         description: "Maximum limits for the heaviest workloads.",
         accentClass: "border-border/60",
         cta: "Upgrade to Max",
@@ -156,8 +157,8 @@ export function PricingCards() {
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl w-full mx-auto items-stretch"
             >
                 {plans.map((plan, index) => {
-                    const price = yearly && plan.monthly > 0 ? plan.yearlyMonthly : plan.monthly
-                    const period = yearly && plan.monthly > 0 ? "/mo, billed yearly" : "/month"
+                    const price = yearly && plan.monthlyPKR > 0 ? plan.yearlyMonthlyPKR : plan.monthlyPKR
+                    const period = yearly && plan.monthlyPKR > 0 ? "/mo, billed yearly" : "/month"
 
                     return (
                         <div
@@ -191,13 +192,13 @@ export function PricingCards() {
                                     <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
                                     <div className="mt-4 flex items-end gap-1">
                                         <span className="text-4xl font-bold text-foreground">
-                                            {price === 0 ? "$0" : `$${price.toFixed(2)}`}
+                                            {price === 0 ? "PKR 0" : formatPKR(price)}
                                         </span>
                                         <span className="text-sm text-muted-foreground mb-1">{period}</span>
                                     </div>
-                                    {yearly && plan.monthly > 0 && (
+                                    {yearly && plan.monthlyPKR > 0 && (
                                         <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">
-                                            Save ~${plan.yearlySaving}/year · ${plan.yearly}/yr total
+                                            Save ~{formatPKR(plan.yearlySaving)}/year. {formatPKR(plan.yearlyPKR)}/yr total
                                         </p>
                                     )}
                                 </div>

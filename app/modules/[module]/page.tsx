@@ -205,13 +205,7 @@ export default function ModulePage({ params }: { params: Promise<{ module: strin
     const router = useRouter()
     const [userPlan, setUserPlan] = useState("free")
 
-    if (!moduleInfo) {
-        return notFound()
-    }
-
-    const Icon = moduleInfo.icon
-
-    // Fetch user plan logic
+    // Must be called before any conditional return to satisfy rules-of-hooks.
     useEffect(() => {
         async function checkPlan() {
             if (user) {
@@ -227,6 +221,12 @@ export default function ModulePage({ params }: { params: Promise<{ module: strin
         }
         checkPlan()
     }, [user])
+
+    if (!moduleInfo) {
+        return notFound()
+    }
+
+    const Icon = moduleInfo.icon
 
     // Access Logic
     const handleAccess = () => {

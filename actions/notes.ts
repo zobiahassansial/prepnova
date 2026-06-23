@@ -5,14 +5,36 @@ import { getGroqModel, GROQ_MODEL } from "@/lib/groq"
 import { checkLimit, incrementUsage, decrementUsage, getUserPlan } from "@/lib/limits"
 import { PLAN_LIMITS } from "@/lib/plan-config"
 
-const PDFParser = require("pdf2json")
-const mammoth = require("mammoth")
+// pdf2json and mammoth ship CommonJS only — dynamic import() returns a module
+// wrapper that doesn't match their runtime API, so require() is necessary here.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PDFParser = require("pdf2json") as { new(a: null, b: number): {
+    on(event: string, cb: (d?: unknown) => void): void
+    parseBuffer(b: Buffer): void
+    getRawTextContent(): string
+} }
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mammoth = require("mammoth") as {
+    extractRawText(opts: { buffer: Buffer }): Promise<{ value: string }>
+}
+
+type SummaryData = {
+    title: string
+    summary: string
+    emoji: string
+    keyPoints: string[]
+    actionItems: string[]
+    questions: string[]
+}
+type SummaryResult =
+    | { success: true; data: SummaryData; extractedText: string }
+    | { success: false; error: string; upgradeRequired?: boolean }
 
 export async function processAndSummarizeNote(
     fileUrl: string,
     fileType: string,
     options?: { outputType?: string; specialInstructions?: string; tone?: string; length?: string }
-) {
+): Promise<SummaryResult> {
     if (!fileUrl) return { success: false, error: "No file URL provided" }
 
     // ── Auth + quota check ────────────────────────────────────────────────────
@@ -21,15 +43,25 @@ export async function processAndSummarizeNote(
     const userId = session.user.id
 
     const quota = await checkLimit(userId, "summaries")
-    if (!quota.allowed) return { success: false, error: quota.error, upgradeRequired: true }
+    if (!quota.allowed) return { success: false, error: quota.error ?? "Quota exceeded.", upgradeRequired: true }
 
     try {
         // ── 1. Download file ────────────────────────────────────────────────
         const fileResponse = await fetch(fileUrl)
         if (!fileResponse.ok) throw new Error(`Failed to download file (${fileResponse.status})`)
 
+        const MAX_BYTES = 10 * 1024 * 1024
+        const contentLength = Number(fileResponse.headers.get("content-length") ?? 0)
+        if (contentLength > MAX_BYTES) {
+            return { success: false, error: "File exceeds the 10 MB maximum size limit." }
+        }
+
         const arrayBuffer = await fileResponse.arrayBuffer()
         const buffer = Buffer.from(arrayBuffer)
+
+        if (buffer.byteLength > MAX_BYTES) {
+            return { success: false, error: "File exceeds the 10 MB maximum size limit." }
+        }
 
         // ── 2. Extract text ─────────────────────────────────────────────────
         let rawText = ""
@@ -37,7 +69,12 @@ export async function processAndSummarizeNote(
         if (fileType.includes("pdf")) {
             rawText = await new Promise<string>((resolve, reject) => {
                 const pdfParser = new PDFParser(null, 1)
-                pdfParser.on("pdfParser_dataError", (e: any) => reject(new Error(e.parserError)))
+                pdfParser.on("pdfParser_dataError", (e: unknown) => {
+                    const msg = e && typeof e === "object" && "parserError" in e
+                        ? String((e as { parserError: unknown }).parserError)
+                        : "PDF parse error"
+                    reject(new Error(msg))
+                })
                 pdfParser.on("pdfParser_dataReady", () => resolve(pdfParser.getRawTextContent()))
                 pdfParser.parseBuffer(buffer)
             })
@@ -328,7 +365,7 @@ ${text.slice(0, 30000)}`
         await incrementUsage(userId, "summaries")
 
         const model = getGroqModel()
-        let result: any
+        let result: Awaited<ReturnType<typeof model.chat.completions.create>>
         try {
             result = await model.chat.completions.create({
                 model: GROQ_MODEL,
@@ -350,9 +387,10 @@ ${text.slice(0, 30000)}`
 
         const content = result.choices[0]?.message?.content || "{}"
 
-        let parsedData: any
+        type RawParsed = { title?: string; summary?: string; emoji?: string; keyPoints?: unknown[]; actionItems?: unknown[]; questions?: unknown[] }
+        let parsedData: RawParsed
         try {
-            parsedData = JSON.parse(content)
+            parsedData = JSON.parse(content) as RawParsed
         } catch {
             await decrementUsage(userId, "summaries")
             console.error("JSON parse failed:", content.slice(0, 300))
@@ -365,15 +403,21 @@ ${text.slice(0, 30000)}`
             return { success: false, error: "AI summary was incomplete. Please try again." }
         }
 
-        // Ensure arrays
-        parsedData.keyPoints   = Array.isArray(parsedData.keyPoints)   ? parsedData.keyPoints   : []
-        parsedData.actionItems = Array.isArray(parsedData.actionItems) ? parsedData.actionItems : []
-        parsedData.questions   = Array.isArray(parsedData.questions)   ? parsedData.questions   : []
+        // After the guard above, title and summary are guaranteed strings.
+        const validatedData: SummaryData = {
+            title:       parsedData.title,
+            summary:     parsedData.summary,
+            emoji:       parsedData.emoji ?? "",
+            keyPoints:   Array.isArray(parsedData.keyPoints)   ? parsedData.keyPoints.map(String)   : [],
+            actionItems: Array.isArray(parsedData.actionItems) ? parsedData.actionItems.map(String) : [],
+            questions:   Array.isArray(parsedData.questions)   ? parsedData.questions.map(String)   : [],
+        }
 
-        return { success: true, data: parsedData, extractedText: text.slice(0, 5000) }
+        return { success: true, data: validatedData, extractedText: text.slice(0, 5000) }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Note processing error:", error)
-        return { success: false, error: error.message || "Failed to process document" }
+        const message = error instanceof Error ? error.message : "Failed to process document"
+        return { success: false, error: message }
     }
 }
